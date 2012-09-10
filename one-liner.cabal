@@ -1,0 +1,33 @@
+Name:                 one-liner
+Version:              0
+Synopsis:             Constraint-based generics
+Description:          Write short and concise generic instances of type classes.
+Homepage:             https://github.com/sjoerdvisscher/one-liner
+Bug-reports:          https://github.com/sjoerdvisscher/one-liner/issues
+License:              BSD3
+License-file:         LICENSE
+Author:               Sjoerd Visscher
+Maintainer:           sjoerd@w3future.com
+Category:             Generics
+Build-type:           Simple
+Cabal-version:        >= 1.6
+
+Extra-Source-Files:
+  examples/*.hs
+
+Library
+  HS-Source-Dirs:  src
+  
+  Exposed-modules:
+    Generics.OneLiner.ADT
+    Generics.OneLiner.ADT1
+    Generics.OneLiner.Info
+  
+  Build-depends:
+      base         >= 4.5 && < 5 
+    , transformers >= 0.3 && < 0.4
+    , ghc-prim
+
+source-repository head
+  type:     git
+  location: git://github.com/sjoerdvisscher/one-liner.git

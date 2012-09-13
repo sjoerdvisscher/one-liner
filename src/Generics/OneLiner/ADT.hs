@@ -16,7 +16,19 @@
   , DefaultSignatures
   , ScopedTypeVariables
   #-}
-module Generics.OneLiner.ADT where
+module Generics.OneLiner.ADT (
+  
+    module Generics.OneLiner.Info
+  , Constraint
+
+  , ADT(..)
+  , For(..)
+  , builds
+  , mbuilds
+  , (!)
+  , at
+  
+  ) where
   
 import Generics.OneLiner.Info
 
@@ -63,19 +75,13 @@ mbuilds for f = fmap getConstant <$> ms
     ms :: [(CtorInfo, Constant m t)]
     ms = buildsA for (Constant . f)
 
-
+infixl 9 !
 (!) :: t -> FieldInfo (t -> s) -> s
 t ! info = project info t
 
 at :: ADT t => [(a, b)] -> t -> b
 at ab t = snd (ab !! ctorIndex t)
 
-
-class Empty a where {}
-instance Empty a
-
-ctorInfo :: (ADT t, Constraints t Empty) => t -> CtorInfo
-ctorInfo t = fst (builds (For :: For Empty) (t !) !! ctorIndex t)
 
 
 instance ADT () where

@@ -21,6 +21,7 @@ Library
   Exposed-modules:
     Generics.OneLiner.ADT
     Generics.OneLiner.ADT1
+    Generics.OneLiner.Functions
     Generics.OneLiner.Info
   
   Build-depends:

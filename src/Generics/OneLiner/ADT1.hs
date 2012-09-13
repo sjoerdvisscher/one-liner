@@ -17,7 +17,22 @@
   , DefaultSignatures
   , ScopedTypeVariables
   #-}
-module Generics.OneLiner.ADT1 where
+module Generics.OneLiner.ADT1 (
+
+    module Generics.OneLiner.Info
+  , Constraint
+  
+  , ADT1(..)
+  , For(..)
+  , builds
+  , mbuilds
+  , (!)
+  , (!~)
+  , at
+  , param
+  , component
+  
+  ) where
 
 import Generics.OneLiner.Info
 
@@ -88,17 +103,13 @@ param f = FieldInfo (Extract f)
 component :: (forall a. t a -> s a) -> FieldInfo (t :~> s)
 component f = FieldInfo (Nat f)
 
+infixl 9 !
 (!) :: t a -> FieldInfo (Extract t) -> a
 t ! info = getExtract (project info) t
 
+infixl 9 !~
 (!~) :: t a -> FieldInfo (t :~> s) -> s a
 t !~ info = getNat (project info) t
-
-class Empty (a :: * -> *) where {}
-instance Empty a
-
-ctorInfo :: (ADT1 t, Constraints t Empty) => t a -> CtorInfo
-ctorInfo t = fst (builds (For :: For Empty) (t !) (t !~) !! ctorIndex t)
 
 
 instance ADT1 Maybe where

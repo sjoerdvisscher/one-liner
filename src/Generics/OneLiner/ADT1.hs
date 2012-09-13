@@ -13,6 +13,8 @@
   , TypeFamilies
   , TypeOperators
   , ConstraintKinds
+  , FlexibleInstances
+  , DefaultSignatures
   , ScopedTypeVariables
   #-}
 module Generics.OneLiner.ADT1 where
@@ -25,46 +27,98 @@ import Data.Functor.Identity
 import Data.Functor.Constant
 import Data.Monoid
 
+import Data.Maybe (fromJust)
 
-type f :~> g = forall x. f x -> g x
 
-data FieldInfo t s = FieldInfo
-  { fieldName :: String
-  , project   :: t :~> s
-  }
+newtype f :~> g = Nat { getNat :: forall x. f x -> g x }
+newtype Extract f = Extract { getExtract :: forall x. f x -> x }
+
 
 data For (c :: (* -> *) -> Constraint) = For
 
 class ADT1 t where
 
-  ctorInfo :: t a -> CtorInfo
+  ctorIndex :: t a -> Int
 
   type Constraints t c :: Constraint
   buildsA :: (Constraints t c, Applicative f)
-           => For c
-           -> ((forall a. t a -> a) -> f b)
-           -> (forall s. c s => FieldInfo t s -> f (s b))
-           -> [f (t b)]
+          => For c
+          -> (FieldInfo (Extract t) -> f b)
+          -> (forall s. c s => FieldInfo (t :~> s) -> f (s b))
+          -> [(CtorInfo, f (t b))]
+          
+  default buildsA :: (c t, Constraints t c, Applicative f)
+                  => For c
+                  -> (FieldInfo (Extract t) -> f b)
+                  -> (forall s. c s => FieldInfo (t :~> s) -> f (s b))
+                  -> [(CtorInfo, f (t b))]
+  buildsA for param sub = buildsRecA for param sub sub 
+
+  buildsRecA :: (Constraints t c, Applicative f)
+             => For c
+             -> (FieldInfo (Extract t) -> f b)
+             -> (forall s. c s => FieldInfo (t :~> s) -> f (s b))
+             -> (FieldInfo (t :~> t) -> f (t b))
+             -> [(CtorInfo, f (t b))]
+  buildsRecA for param sub _ = buildsA for param sub
 
 builds :: (ADT1 t, Constraints t c) 
        => For c
-       -> ((forall a. t a -> a) -> b)
-       -> (forall s. c s => FieldInfo t s -> s b)
-       -> [t b]
-builds for f g = fmap runIdentity $ buildsA for (Identity . f) (Identity . g)
+       -> (FieldInfo (Extract t) -> b)
+       -> (forall s. c s => FieldInfo (t :~> s) -> s b)
+       -> [(CtorInfo, t b)]
+builds for f g = fmap runIdentity <$> buildsA for (Identity . f) (Identity . g)
 
 mbuilds :: forall t c m. (ADT1 t, Constraints t c, Monoid m) 
         => For c
-        -> ((forall a. t a -> a) -> m)
-        -> (forall s. c s => FieldInfo t s -> m)
-        -> [m]
-mbuilds for f g = fmap getConstant ms
+        -> (FieldInfo (Extract t) -> m)
+        -> (forall s. c s => FieldInfo (t :~> s) -> m)
+        -> [(CtorInfo, m)]
+mbuilds for f g = fmap getConstant <$> ms
   where
-    ms :: [Constant m (t b)]
+    ms :: [(CtorInfo, Constant m (t b))]
     ms = buildsA for (Constant . f) (Constant . g)
 
-(!) :: t a -> FieldInfo t s -> s a
-t ! FieldInfo _ proj = proj t
+at :: ADT1 t => [(c, a)] -> t b -> a
+at as t = snd (as !! ctorIndex t)
 
-at :: ADT1 t => [a] -> t b -> a
-at as t = as !! ctorIndex (ctorInfo t)
+param :: (forall a. t a -> a) -> FieldInfo (Extract t)
+param f = FieldInfo (Extract f)
+
+component :: (forall a. t a -> s a) -> FieldInfo (t :~> s)
+component f = FieldInfo (Nat f)
+
+(!) :: t a -> FieldInfo (Extract t) -> a
+t ! info = getExtract (project info) t
+
+(!~) :: t a -> FieldInfo (t :~> s) -> s a
+t !~ info = getNat (project info) t
+
+class Empty (a :: * -> *) where {}
+instance Empty a
+
+ctorInfo :: (ADT1 t, Constraints t Empty) => t a -> CtorInfo
+ctorInfo t = fst (builds (For :: For Empty) (t !) (t !~) !! ctorIndex t)
+
+
+instance ADT1 Maybe where
+  
+  ctorIndex Nothing = 0
+  ctorIndex Just{}  = 1
+  
+  type Constraints Maybe c = ()
+  buildsA For f _ = 
+    [ (ctor "Nothing", pure Nothing)
+    , (ctor "Just", Just <$> f (param fromJust))
+    ]
+  
+instance ADT1 [] where
+  
+  ctorIndex [] = 0
+  ctorIndex (_:_) = 1 
+  
+  type Constraints [] c = c []
+  buildsRecA For p _ r = 
+    [ (ctor "[]", pure [])
+    , (CtorInfo ":" False (Infix RightAssociative 5), (:) <$> p (param head) <*> r (component tail))
+    ]

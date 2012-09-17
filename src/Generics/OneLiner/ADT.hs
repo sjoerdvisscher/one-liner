@@ -18,11 +18,16 @@
   #-}
 module Generics.OneLiner.ADT (
   
+    -- * Re-exports
     module Generics.OneLiner.Info
   , Constraint
-
+    -- | The kind of constraints
+    
+    -- * The `ADT` type class
   , ADT(..)
   , For(..)
+
+    -- * Helper functions
   , builds
   , mbuilds
   , (!)

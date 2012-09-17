@@ -1,8 +1,15 @@
-{-# LANGUAGE TypeFamilies, DefaultSignatures, ConstraintKinds, OverlappingInstances #-}
+{-# LANGUAGE 
+    TypeFamilies
+  , ConstraintKinds
+  , FlexibleInstances
+  , DefaultSignatures
+  , OverlappingInstances
+  , TypeSynonymInstances
+  #-}
 
 import Generics.OneLiner.ADT
-
 import Control.Applicative
+
 
 data Company  = C [Dept]               deriving (Eq, Read, Show)               
 data Dept     = D Name Manager [Unit]  deriving (Eq, Read, Show)
@@ -19,14 +26,7 @@ genCom :: Company
 genCom = C [D "Research" laemmel [PU joost, PU marlow],
             D "Strategy" blair   []]
 
--- A typo for the sake of testing equality;
--- (cf. lammel vs. laemmel)
-genCom' :: Company
-genCom' = C [D "Research" lammel [PU joost, PU marlow],
-             D "Strategy" blair   []]
-
-lammel, laemmel, joost, marlow, blair :: Employee
-lammel  = E (P "Lammel" "Amsterdam") (S 8000)
+laemmel, joost, marlow, blair :: Employee
 laemmel = E (P "Laemmel" "Amsterdam") (S 8000)
 joost   = E (P "Joost"   "Amsterdam") (S 1000)
 marlow  = E (P "Marlow"  "Cambridge") (S 2000)
@@ -75,8 +75,7 @@ instance IncreaseSalary Company
 instance IncreaseSalary Dept
 instance IncreaseSalary Unit
 instance IncreaseSalary Employee
-instance IncreaseSalary Person where
-  increaseSalary _ = id
+instance IncreaseSalary Person
 instance IncreaseSalary Salary where
   increaseSalary k (S s) = S (s * (1+k))
 instance IncreaseSalary a => IncreaseSalary [a]

@@ -30,6 +30,7 @@ module Generics.OneLiner.ADT (
     -- * Helper functions
   , builds
   , mbuilds
+  , everywhere
   , (!)
   , at
   
@@ -79,6 +80,10 @@ mbuilds for f = fmap getConstant <$> ms
   where
     ms :: [(CtorInfo, Constant m t)]
     ms = buildsA for (Constant . f)
+
+everywhere :: (ADT t, Constraints t c)
+           => For c -> (forall s. c s => s -> s) -> t -> t
+everywhere for f t = builds for (\info -> f (t ! info)) `at` t
 
 infixl 9 !
 (!) :: t -> FieldInfo (t -> s) -> s

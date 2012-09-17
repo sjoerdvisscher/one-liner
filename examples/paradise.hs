@@ -64,11 +64,12 @@ instance ADT Person where
 instance ADT Salary where
   type Constraints Salary c = (c Float)
   buildsA For f = [(ctor "S", S <$> f (FieldInfo $ \(S s) -> s))]
+
   
 class IncreaseSalary t where
   increaseSalary :: Float -> t -> t
   default increaseSalary :: (ADT t, Constraints t IncreaseSalary) => Float -> t -> t
-  increaseSalary k t = builds (For :: For IncreaseSalary) (\info -> increaseSalary k (t ! info)) `at` t
+  increaseSalary k = everywhere (For :: For IncreaseSalary) (increaseSalary k)
 
 instance IncreaseSalary Company
 instance IncreaseSalary Dept

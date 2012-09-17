@@ -61,6 +61,7 @@ data For (c :: (* -> *) -> Constraint) = For
 class ADT1 t where
 
   ctorIndex :: t a -> Int
+  ctorIndex _ = 0
 
   type Constraints t c :: Constraint
   buildsA :: (Constraints t c, Applicative f)

@@ -51,33 +51,65 @@ import Data.Monoid
 import Data.Maybe (fromJust)
 
 
+-- | Tell the compiler which class we want to use in the traversal. Should be used like this:
+--
+-- > (For :: For Show)
+--
+-- Where @Show@ can be any class.
 data For (c :: * -> Constraint) = For
 
+-- | Type class for algebraic data types of kind @*@. Minimal implementation: `ctorIndex` and either `buildsA`
+-- if the type @t@ is not recursive, or `buildsRecA` if the type @t@ is recursive.
 class ADT t where
 
+  -- | Gives the index of the constructor of the given value in the list returned by `buildsA` and `buildsRecA`.
   ctorIndex :: t -> Int
   ctorIndex _ = 0
 
+  -- | The constraints needed to run `buildsA` and `buildsRecA`. 
+  -- It should be a list of all the types of the subcomponents of @t@, each applied to @c@.
+  -- For example, if you have a data type like:
+  --
+  -- > data T a = A Int a | B a (T a)
+  --
+  -- Then the constaints should be
+  --
+  -- > type Constraints (T a) c = (c Int, c a, c (T a))
   type Constraints t c :: Constraint
-  buildsA :: (Constraints t c, Applicative f) 
-          => For c -> (forall s. c s => FieldInfo (t -> s) -> f s) -> [(CtorInfo, f t)]
+  
+  buildsA :: (Constraints t c, Applicative f)
+          => For c -- ^ Witness for the constraint @c@.
+          -> (forall s. c s => FieldInfo (t -> s) -> f s) -- ^ This function should return a value
+             -- for each subcomponent of @t@, wrapped in an applicative functor @f@. It is given 
+             -- information about the field, which contains a projector function to get the subcomponent 
+             -- from a value of type @t@. The type of the subcomponent is an instance of class @c@.
+          -> [(CtorInfo, f t)] -- ^ A list of pairs, one for each constructor of type @t@. Each pair
+             -- consists of information about the constructor and the result of applicatively applying 
+             -- the constructor to the results of the given function for each field of the constructor.
   
   default buildsA :: (c t, Constraints t c, Applicative f) 
                   => For c -> (forall s. c s => FieldInfo (t -> s) -> f s) -> [(CtorInfo, f t)]  
   buildsA for f = buildsRecA for f f
   
   buildsRecA :: (Constraints t c, Applicative f) 
-             => For c 
-             -> (forall s. c s => FieldInfo (t -> s) -> f s) 
-             -> (FieldInfo (t -> t) -> f t)
-             -> [(CtorInfo, f t)]
+             => For c -- ^ Witness for the constraint @c@.
+             -> (forall s. c s => FieldInfo (t -> s) -> f s) -- ^ This function should return a value
+                -- for each subcomponent of @t@, wrapped in an applicative functor @f@. It is given 
+                -- information about the field, which contains a projector function to get the subcomponent 
+                -- from a value of type @t@. The type of the subcomponent is an instance of class @c@.
+             -> (FieldInfo (t -> t) -> f t) -- ^ This function should return a value
+                -- for each subcomponent of @t@ that is itself of type @t@.
+             -> [(CtorInfo, f t)] -- ^ A list of pairs, one for each constructor of type @t@. Each pair
+                -- consists of information about the constructor and the result of applicatively applying 
+                -- the constructor to the results of the given functions for each field of the constructor.
   buildsRecA for sub _ = buildsA for sub
 
-
+-- | `buildsA` specialized to the `Identity` applicative functor.
 builds :: (ADT t, Constraints t c) 
        => For c -> (forall s. c s => FieldInfo (t -> s) -> s) -> [(CtorInfo, t)]
 builds for f = fmap runIdentity <$> buildsA for (Identity . f)  
 
+-- | `buildsA` specialized to the `Constant` applicative functor, which collects monoid values @m@.
 mbuilds :: forall t c m. (ADT t, Constraints t c, Monoid m) 
         => For c -> (forall s. c s => FieldInfo (t -> s) -> m) -> [(CtorInfo, m)]
 mbuilds for f = fmap getConstant <$> ms
@@ -85,23 +117,28 @@ mbuilds for f = fmap getConstant <$> ms
     ms :: [(CtorInfo, Constant m t)]
     ms = buildsA for (Constant . f)
 
+-- | Transform a value by transforming each subcomponent.
 gmap :: (ADT t, Constraints t c)
      => For c -> (forall s. c s => s -> s) -> t -> t
 gmap for f t = builds for (\info -> f (t ! info)) `at` t
 
+-- | Fold a value, by mapping each subcomponent to a monoid value and collecting those. 
 gfoldMap :: (ADT t, Constraints t c, Monoid m)
          => For c -> (forall s. c s => s -> m) -> t -> m
 gfoldMap for f = getConstant . gtraverse for (Constant . f)
 
+-- | Applicative traversal given a way to traverse each subcomponent.
 gtraverse :: (ADT t, Constraints t c, Applicative f) 
           => For c -> (forall s. c s => s -> f s) -> t -> f t
 gtraverse for f t = buildsA for (\info -> f (t ! info)) `at` t
 
 
 infixl 9 !
+-- | Get the subcomponent by using the projector from the field information.
 (!) :: t -> FieldInfo (t -> s) -> s
 t ! info = project info t
 
+-- | Get the value from the result of one of the @builds@ functions that matches the constructor of @t@.
 at :: ADT t => [(a, b)] -> t -> b
 at ab t = snd (ab !! ctorIndex t)
 

@@ -23,16 +23,20 @@ module Generics.OneLiner.ADT (
   , Constraint
     -- | The kind of constraints
     
-    -- * The `ADT` type class
+    -- * The @ADT@ type class
   , ADT(..)
   , For(..)
 
     -- * Helper functions
-  , builds
-  , mbuilds
-  , everywhere
   , (!)
   , at
+  
+    -- * Derived traversal schemes
+  , builds
+  , mbuilds
+  , gmap
+  , gfoldMap
+  , gtraverse
   
   ) where
   
@@ -81,9 +85,18 @@ mbuilds for f = fmap getConstant <$> ms
     ms :: [(CtorInfo, Constant m t)]
     ms = buildsA for (Constant . f)
 
-everywhere :: (ADT t, Constraints t c)
-           => For c -> (forall s. c s => s -> s) -> t -> t
-everywhere for f t = builds for (\info -> f (t ! info)) `at` t
+gmap :: (ADT t, Constraints t c)
+     => For c -> (forall s. c s => s -> s) -> t -> t
+gmap for f t = builds for (\info -> f (t ! info)) `at` t
+
+gfoldMap :: (ADT t, Constraints t c, Monoid m)
+         => For c -> (forall s. c s => s -> m) -> t -> m
+gfoldMap for f = getConstant . gtraverse for (Constant . f)
+
+gtraverse :: (ADT t, Constraints t c, Applicative f) 
+          => For c -> (forall s. c s => s -> f s) -> t -> f t
+gtraverse for f t = buildsA for (\info -> f (t ! info)) `at` t
+
 
 infixl 9 !
 (!) :: t -> FieldInfo (t -> s) -> s

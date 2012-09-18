@@ -69,7 +69,7 @@ instance ADT Salary where
 class IncreaseSalary t where
   increaseSalary :: Float -> t -> t
   default increaseSalary :: (ADT t, Constraints t IncreaseSalary) => Float -> t -> t
-  increaseSalary k = everywhere (For :: For IncreaseSalary) (increaseSalary k)
+  increaseSalary k = gmap (For :: For IncreaseSalary) (increaseSalary k)
 
 instance IncreaseSalary Company
 instance IncreaseSalary Dept

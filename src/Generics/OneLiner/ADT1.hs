@@ -24,20 +24,22 @@ module Generics.OneLiner.ADT1 (
   , Constraint
     -- | The kind of constraints
   
-    -- * The `ADT1` type class
+    -- * The @ADT1@ type class
   , ADT1(..)
   , For(..)
   , Extract(..)
   , (:~>)(..)
   
     -- * Helper functions
-  , builds
-  , mbuilds
   , (!)
   , (!~)
   , at
   , param
   , component
+  
+  -- * Derived traversal schemes
+  , builds
+  , mbuilds
   
   ) where
 

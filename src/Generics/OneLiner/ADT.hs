@@ -7,6 +7,34 @@
 -- Maintainer  :  sjoerd@w3future.com
 -- Stability   :  experimental
 -- Portability :  non-portable
+--
+-- This module is for writing generic functions on algebraic data types 
+-- of kind @*@. These data types must be an instance of the `ADT` type class.
+-- 
+-- Here's an example how to write such an instance for this data type:
+--
+-- @
+-- data T a = A Int a | B a (T a)
+-- @
+--
+-- @
+-- instance `ADT` (T a) where
+--   `ctorIndex` A{} = 0
+--   `ctorIndex` B{} = 1
+--   type `Constraints` (T a) c = (c Int, c a, c (T a))
+--   `buildsRecA` `For` sub rec = 
+--     [ (`ctor` \"A\", A `<$>` sub (`FieldInfo` (\\(A i _) -> i)) `<*>` sub (`FieldInfo` (\\(A _ a) -> a)))
+--     , (`ctor` \"B\", B `<$>` sub (`FieldInfo` (\\(B a _) -> a)) `<*>` rec (`FieldInfo` (\\(B _ t) -> t)))
+--     ]
+-- @
+--
+-- And this is how you would write generic equality, using the `All` monoid:
+--
+-- @
+-- eqADT :: (`ADT` t, `Constraints` t `Eq`) => t -> t -> `Bool`
+-- eqADT s t = `ctorIndex` s == `ctorIndex` t `&&` 
+--   `getAll` (`mbuilds` (`For` :: `For` `Eq`) (\\fld -> `All` $ s `!` fld `==` t `!` fld) \``at`\` s)
+-- @
 -----------------------------------------------------------------------------
 {-# LANGUAGE 
     RankNTypes
@@ -68,13 +96,6 @@ class ADT t where
 
   -- | The constraints needed to run `buildsA` and `buildsRecA`. 
   -- It should be a list of all the types of the subcomponents of @t@, each applied to @c@.
-  -- For example, if you have a data type like:
-  --
-  -- > data T a = A Int a | B a (T a)
-  --
-  -- Then the constaints should be
-  --
-  -- > type Constraints (T a) c = (c Int, c a, c (T a))
   type Constraints t c :: Constraint
   
   buildsA :: (Constraints t c, Applicative f)

@@ -14,9 +14,8 @@ class Size t where
   size :: t -> Int
   
   default size :: (ADT t, Constraints t Size) => t -> Int
-  size t = 1 + getSum (mbuilds (For :: For Size) (\fld -> Sum $ size (t ! fld)) `at` t)
+  size = succ . getSum . gfoldMap (For :: For Size) (Sum . size)
   
-instance Size ()
 instance Size Bool
 instance Size a => Size (Maybe a)
 
@@ -28,7 +27,6 @@ class EnumAll t where
   default enumAll :: (ADT t, Constraints t EnumAll) => [t]
   enumAll = concatMap snd $ buildsA (For :: For EnumAll) (const enumAll)
 
-instance EnumAll ()
 instance EnumAll Bool
 instance EnumAll a => EnumAll (Maybe a)
 

@@ -24,9 +24,9 @@ eqADT :: (ADT t, Constraints t Eq) => t -> t -> Bool
 eqADT s t = ctorIndex s == ctorIndex t && 
   getAll (mbuilds (For :: For Eq) (\fld -> All $ s ! fld == t ! fld) `at` s)
 
-cmpADT :: (ADT t, Constraints t Ord) => t -> t -> Ordering
-cmpADT s t = ctorIndex s `compare` ctorIndex t <> 
-  mbuilds (For :: For Ord) (\fld -> (s ! fld) `compare` (t ! fld)) `at` s
+compareADT :: (ADT t, Constraints t Ord) => t -> t -> Ordering
+compareADT s t = compare (ctorIndex s) (ctorIndex t) <> 
+  mbuilds (For :: For Ord) (\fld -> compare (s ! fld) (t ! fld)) `at` s
 
 minBoundADT :: (ADT t, Constraints t Bounded) => t
 minBoundADT = snd $ head $ builds (For :: For Bounded) (const minBound)

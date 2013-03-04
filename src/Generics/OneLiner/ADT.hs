@@ -21,10 +21,12 @@
 -- instance `ADT` (T a) where
 --   `ctorIndex` A{} = 0
 --   `ctorIndex` B{} = 1
+--   `ctorInfo` _ 0 = `ctor` \"A\"
+--   `ctorInfo` _ 1 = `ctor` \"B\"
 --   type `Constraints` (T a) c = (c Int, c a, c (T a))
 --   `buildsRecA` `For` sub rec = 
---     [ (`ctor` \"A\", A `<$>` sub (`FieldInfo` (\\(A i _) -> i)) `<*>` sub (`FieldInfo` (\\(A _ a) -> a)))
---     , (`ctor` \"B\", B `<$>` sub (`FieldInfo` (\\(B a _) -> a)) `<*>` rec (`FieldInfo` (\\(B _ t) -> t)))
+--     [ A `<$>` sub (`FieldInfo` (\\(A i _) -> i)) `<*>` sub (`FieldInfo` (\\(A _ a) -> a))
+--     , B `<$>` sub (`FieldInfo` (\\(B a _) -> a)) `<*>` rec (`FieldInfo` (\\(B _ t) -> t))
 --     ]
 -- @
 --

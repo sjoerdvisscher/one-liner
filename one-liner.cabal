@@ -1,5 +1,5 @@
 Name:                 one-liner
-Version:              0.2
+Version:              0.2.1
 Synopsis:             Constraint-based generics
 Description:          Write short and concise generic instances of type classes.
 Homepage:             https://github.com/sjoerdvisscher/one-liner

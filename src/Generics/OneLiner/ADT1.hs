@@ -22,10 +22,12 @@
 -- instance `ADT1` T where
 --   `ctorIndex` A{} = 0
 --   `ctorIndex` B{} = 1
+--   `ctorInfo` _ 0 = `ctor` \"A\"
+--   `ctorInfo` _ 1 = `ctor` \"B\"
 --   type `Constraints` T c = (c [], c T)
 --   `buildsRecA` `For` par sub rec = 
---     [ (`ctor` \"A\", A `<$>` sub (`component` (\\(A l) -> l))
---     , (`ctor` \"B\", B `<$>` par (`param` (\\(B a _) -> a)) `<*>` rec (`component` (\\(B _ t) -> t)))
+--     [ A `<$>` sub (`component` (\\(A l) -> l)
+--     , B `<$>` par (`param` (\\(B a _) -> a)) `<*>` rec (`component` (\\(B _ t) -> t))
 --     ]
 -- @
 -----------------------------------------------------------------------------

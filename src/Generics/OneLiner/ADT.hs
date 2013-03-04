@@ -53,6 +53,7 @@ module Generics.OneLiner.ADT (
     
     -- * The @ADT@ type class
   , ADT(..)
+  , ADTRecord(..)
   , For(..)
 
     -- * Helper functions
@@ -65,6 +66,12 @@ module Generics.OneLiner.ADT (
   , gmap
   , gfoldMap
   , gtraverse
+
+    -- ** ...for single constructor data types
+  , build
+  , op0
+  , op1
+  , op2
   
   ) where
   
@@ -93,6 +100,10 @@ class ADT t where
   -- | Gives the index of the constructor of the given value in the list returned by `buildsA` and `buildsRecA`.
   ctorIndex :: t -> Int
   ctorIndex _ = 0
+  
+  -- | @ctorInfo n@ gives constructor information, f.e. its name, for the @n@th constructor.
+  --   The first argument is a dummy argument and can be @(undefined :: t)@.
+  ctorInfo :: t -> Int -> CtorInfo
 
   -- | The constraints needed to run `buildsA` and `buildsRecA`. 
   -- It should be a list of all the types of the subcomponents of @t@, each applied to @c@.
@@ -104,12 +115,12 @@ class ADT t where
              -- for each subcomponent of @t@, wrapped in an applicative functor @f@. It is given 
              -- information about the field, which contains a projector function to get the subcomponent 
              -- from a value of type @t@. The type of the subcomponent is an instance of class @c@.
-          -> [(CtorInfo, f t)] -- ^ A list of pairs, one for each constructor of type @t@. Each pair
-             -- consists of information about the constructor and the result of applicatively applying 
-             -- the constructor to the results of the given function for each field of the constructor.
+          -> [f t] -- ^ A list of results, one for each constructor of type @t@. Each element is the 
+             -- result of applicatively applying the constructor to the results of the given function 
+             -- for each field of the constructor.
   
   default buildsA :: (c t, Constraints t c, Applicative f) 
-                  => For c -> (forall s. c s => FieldInfo (t -> s) -> f s) -> [(CtorInfo, f t)]  
+                  => For c -> (forall s. c s => FieldInfo (t -> s) -> f s) -> [f t]
   buildsA for f = buildsRecA for f f
   
   buildsRecA :: (Constraints t c, Applicative f) 
@@ -120,28 +131,30 @@ class ADT t where
                 -- from a value of type @t@. The type of the subcomponent is an instance of class @c@.
              -> (FieldInfo (t -> t) -> f t) -- ^ This function should return a value
                 -- for each subcomponent of @t@ that is itself of type @t@.
-             -> [(CtorInfo, f t)] -- ^ A list of pairs, one for each constructor of type @t@. Each pair
-                -- consists of information about the constructor and the result of applicatively applying 
-                -- the constructor to the results of the given functions for each field of the constructor.
+             -> [f t] -- ^ A list of results, one for each constructor of type @t@. Each element is the 
+             -- result of applicatively applying the constructor to the results of the given function 
+             -- for each field of the constructor.
   buildsRecA for sub _ = buildsA for sub
+
+-- | Add an instance for this class if the data type has exactly one constructor.
+--
+--   This class has no methods.
+class ADT t => ADTRecord t where
 
 -- | `buildsA` specialized to the `Identity` applicative functor.
 builds :: (ADT t, Constraints t c) 
-       => For c -> (forall s. c s => FieldInfo (t -> s) -> s) -> [(CtorInfo, t)]
-builds for f = fmap runIdentity <$> buildsA for (Identity . f)  
+       => For c -> (forall s. c s => FieldInfo (t -> s) -> s) -> [t]
+builds for f = runIdentity <$> buildsA for (Identity . f)  
 
 -- | `buildsA` specialized to the `Constant` applicative functor, which collects monoid values @m@.
 mbuilds :: forall t c m. (ADT t, Constraints t c, Monoid m) 
-        => For c -> (forall s. c s => FieldInfo (t -> s) -> m) -> [(CtorInfo, m)]
-mbuilds for f = fmap getConstant <$> ms
-  where
-    ms :: [(CtorInfo, Constant m t)]
-    ms = buildsA for (Constant . f)
+        => For c -> (forall s. c s => FieldInfo (t -> s) -> m) -> [m]
+mbuilds for f = getConstant <$> (buildsA for (Constant . f) :: [Constant m t])
 
 -- | Transform a value by transforming each subcomponent.
 gmap :: (ADT t, Constraints t c)
      => For c -> (forall s. c s => s -> s) -> t -> t
-gmap for f t = builds for (\info -> f (t ! info)) `at` t
+gmap for f t = builds for (\fld -> f (t ! fld)) `at` t
 
 -- | Fold a value, by mapping each subcomponent to a monoid value and collecting those. 
 gfoldMap :: (ADT t, Constraints t c, Monoid m)
@@ -151,65 +164,122 @@ gfoldMap for f = getConstant . gtraverse for (Constant . f)
 -- | Applicative traversal given a way to traverse each subcomponent.
 gtraverse :: (ADT t, Constraints t c, Applicative f) 
           => For c -> (forall s. c s => s -> f s) -> t -> f t
-gtraverse for f t = buildsA for (\info -> f (t ! info)) `at` t
+gtraverse for f t = buildsA for (\fld -> f (t ! fld)) `at` t
+
+-- | `builds` for data types with exactly one constructor
+build :: (ADTRecord t, Constraints t c) 
+      => For c -> (forall s. c s => FieldInfo (t -> s) -> s) -> t
+build for f = head $ builds for f
+
+-- | Derive a 0-ary operation by applying the operation to every subcomponent.
+op0 :: (ADTRecord t, Constraints t c) => For c -> (forall s. c s => s) -> t
+op0 for op = build for (const op)
+
+-- | Derive a unary operation by applying the operation to every subcomponent.
+op1 :: (ADTRecord t, Constraints t c) => For c -> (forall s. c s => s -> s) -> t -> t
+op1 for op t = build for (\fld -> op $ t ! fld)
+
+-- | Derive a binary operation by applying the operation to every subcomponent.
+op2 :: (ADTRecord t, Constraints t c) => For c -> (forall s. c s => s -> s -> s) -> t -> t -> t
+op2 for op s t = build for (\fld -> (s ! fld) `op` (t ! fld))
+
 
 
 infixl 9 !
 -- | Get the subcomponent by using the projector from the field information.
 (!) :: t -> FieldInfo (t -> s) -> s
-t ! info = project info t
+t ! fld = project fld t
 
 -- | Get the value from the result of one of the @builds@ functions that matches the constructor of @t@.
-at :: ADT t => [(a, b)] -> t -> b
-at ab t = snd (ab !! ctorIndex t)
+at :: ADT t => [a] -> t -> a
+at as t = as !! ctorIndex t
 
 
 
 instance ADT () where
   
   type Constraints () c = ()
-  buildsA For _ = [ (ctor "()", pure ()) ]
+  ctorInfo _ 0 = ctor "()"
+  buildsA For _ = [ pure () ]
+
+instance ADTRecord () where
   
+instance ADT (a, b) where
+  
+  type Constraints (a, b) c = (c a, c b)
+  ctorInfo _ 0 = ctor "(,)"
+  buildsA For f = [ (,) <$> f (FieldInfo fst) <*> f (FieldInfo snd) ]
+
+instance ADTRecord (a, b) where
+
+instance ADT (a, b, c) where
+
+  type Constraints (a, b, c) tc = (tc a, tc b, tc c)
+  ctorInfo _ 0 = ctor "(,,)"
+  buildsA For f = [(,,) <$> f (FieldInfo (\(a, _, _) -> a))
+                        <*> f (FieldInfo (\(_, b, _) -> b))
+                        <*> f (FieldInfo (\(_, _, c) -> c))
+                  ]
+
+instance ADTRecord (a, b, c) where
+
+instance ADT (a, b, c, d) where
+
+  type Constraints (a, b, c, d) tc = (tc a, tc b, tc c, tc d)
+  ctorInfo _ 0 = ctor "(,,,)"
+  buildsA For f = [(,,,) <$> f (FieldInfo (\(a, _, _, _) -> a))
+                         <*> f (FieldInfo (\(_, b, _, _) -> b))
+                         <*> f (FieldInfo (\(_, _, c, _) -> c))
+                         <*> f (FieldInfo (\(_, _, _, d) -> d))
+                  ]
+
+instance ADTRecord (a, b, c, d) where
+
 instance ADT Bool where
 
   ctorIndex False = 0
   ctorIndex True  = 1
+  ctorInfo _ 0 = ctor "False"
+  ctorInfo _ 1 = ctor "True"
 
   type Constraints Bool c = ()
-  buildsA For _ = 
-    [ (ctor "False", pure False)
-    , (ctor "True",  pure True) ]
+  buildsA For _ = [ pure False, pure True ]
 
 instance ADT (Either a b) where
 
   ctorIndex Left{}  = 0
   ctorIndex Right{} = 1
+  ctorInfo _ 0 = ctor "Left"
+  ctorInfo _ 1 = ctor "Right"
 
   type Constraints (Either a b) c = (c a, c b)
   buildsA For f = 
-    [ (ctor "Left",  Left  <$> f (FieldInfo (\(Left a)  -> a)))
-    , (ctor "Right", Right <$> f (FieldInfo (\(Right a) -> a)))
+    [ Left  <$> f (FieldInfo (\(Left a)  -> a))
+    , Right <$> f (FieldInfo (\(Right a) -> a))
     ]
 
 instance ADT (Maybe a) where
 
   ctorIndex Nothing = 0
   ctorIndex Just{}  = 1
+  ctorInfo _ 0 = ctor "Nothing"
+  ctorInfo _ 1 = ctor "Just"
 
   type Constraints (Maybe a) c = c a
   buildsA For f = 
-    [ (ctor "Nothing", pure Nothing)
-    , (ctor "Just", Just <$> f (FieldInfo fromJust))
+    [ pure Nothing
+    , Just <$> f (FieldInfo fromJust)
     ]
 
 instance ADT [a] where
 
   ctorIndex []    = 0
   ctorIndex (_:_) = 1
+  ctorInfo _ 0 = ctor "[]"
+  ctorInfo _ 1 = CtorInfo ":" False (Infix RightAssociative 5)
 
   type Constraints [a] c = (c a, c [a])
   buildsRecA For sub rec = 
-    [ (ctor "[]", pure [])
-    , (CtorInfo ":" False (Infix RightAssociative 5)
-      ,(:) <$> sub (FieldInfo head) <*> rec (FieldInfo tail))]
+    [ pure []
+    , (:) <$> sub (FieldInfo head) <*> rec (FieldInfo tail)]
   

@@ -9,7 +9,19 @@
 -- Portability :  non-portable
 -----------------------------------------------------------------------------
 {-# LANGUAGE RankNTypes, ConstraintKinds, ScopedTypeVariables #-}
-module Generics.OneLiner.Functions where
+module Generics.OneLiner.Functions (
+  -- * For all instances
+    eqADT
+  , compareADT
+  , minBoundADT
+  , maxBoundADT
+  , showsPrecADT
+  , readPrecADT
+  -- * For datatypes with one constructor
+  , memptyADT
+  , mappendADT
+  , fromIntegerADT
+  ) where
 
 import Generics.OneLiner.ADT
 import Control.Applicative
@@ -29,15 +41,15 @@ compareADT s t = compare (ctorIndex s) (ctorIndex t) <>
   mbuilds (For :: For Ord) (\fld -> compare (s ! fld) (t ! fld)) `at` s
 
 minBoundADT :: (ADT t, Constraints t Bounded) => t
-minBoundADT = snd $ head $ builds (For :: For Bounded) (const minBound)
+minBoundADT = head $ builds (For :: For Bounded) (const minBound)
 
 maxBoundADT :: (ADT t, Constraints t Bounded) => t
-maxBoundADT = snd $ last $ builds (For :: For Bounded) (const maxBound)
+maxBoundADT = last $ builds (For :: For Bounded) (const maxBound)
 
 showsPrecADT :: forall t. (ADT t, Constraints t Show) => Int -> t -> ShowS
 showsPrecADT d t = inner fty
   where
-    CtorInfo name rec fty = fst $ builds (For :: For Show) (t !) !! ctorIndex t
+    CtorInfo name rec fty = ctorInfo t (ctorIndex t)
 
     inner (Infix _ d') = showParen (d > d') $ let [f0, f1] = fields (d' + 1) in 
       f0 . showChar ' ' . showString name . showChar ' ' . f1
@@ -59,7 +71,7 @@ showsPrecADT d t = inner fty
 readPrecADT :: forall t. (ADT t, Constraints t Read) => ReadPrec t
 readPrecADT = parens (choice ctorReads)
   where
-    ctorReads = ctorParse <$> buildsA (For :: For Read) fieldParse
+    ctorReads = ctorParse <$> zip (fmap (ctorInfo (undefined :: t)) [0..]) (buildsA (For :: For Read) fieldParse)
 
     ctorParse (CtorInfo name _ (Infix _ d), getFields) = 
       let flds = evalStateT getFields $ do { Symbol name' <- lexP; guard (name' == name) }
@@ -91,3 +103,13 @@ readPrecADT = parens (choice ctorReads)
       res <- step readPrec
       parseOp
       return (res, return ())
+
+
+memptyADT :: (ADTRecord t, Constraints t Monoid) => t
+memptyADT = op0 (For :: For Monoid) mempty
+
+mappendADT :: (ADTRecord t, Constraints t Monoid) => t -> t -> t
+mappendADT = op2 (For :: For Monoid) mappend
+
+fromIntegerADT :: (ADTRecord t, Constraints t Num) => Integer -> t
+fromIntegerADT i = op0 (For :: For Num) (fromInteger i)

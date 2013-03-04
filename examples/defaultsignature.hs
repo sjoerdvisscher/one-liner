@@ -25,7 +25,7 @@ class EnumAll t where
   enumAll :: [t]
   
   default enumAll :: (ADT t, Constraints t EnumAll) => [t]
-  enumAll = concatMap snd $ buildsA (For :: For EnumAll) (const enumAll)
+  enumAll = concat $ buildsA (For :: For EnumAll) (const enumAll)
 
 instance EnumAll Bool
 instance EnumAll a => EnumAll (Maybe a)
@@ -38,13 +38,13 @@ instance ADT (Tree a) where
   
   ctorIndex Leaf{}  = 0
   ctorIndex (_:^:_) = 1
+  ctorInfo _ 0 = CtorInfo "Leaf" True Prefix
+  ctorInfo _ 1 = CtorInfo ":^:"  False (Infix RightAssociative 5)
   
   type Constraints (Tree a) c = (c a, c (Tree a))
   buildsRecA For sub rec = 
-    [ (CtorInfo "Leaf" True Prefix, 
-         Leaf <$> sub (SelectorInfo "value" value))
-    , (CtorInfo ":^:"  False (Infix RightAssociative 5),
-        (:^:) <$> rec (FieldInfo (\(l :^: _) -> l)) <*> rec (FieldInfo (\(_ :^: r) -> r)))
+    [ Leaf <$> sub (SelectorInfo "value" value)
+    , (:^:) <$> rec (FieldInfo (\(l :^: _) -> l)) <*> rec (FieldInfo (\(_ :^: r) -> r))
     ]
 
 instance Show a => Show (Tree a) where showsPrec = showsPrecADT

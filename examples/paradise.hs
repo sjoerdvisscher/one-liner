@@ -35,35 +35,42 @@ blair   = E (P "Blair"   "London")    (S 100000)
 
 instance ADT Company where
   type Constraints Company c = c [Dept]
-  buildsA For f = [(ctor "C", C <$> f (FieldInfo $ \(C l) -> l))]
+  ctorInfo _ 0 = ctor "C"
+  buildsA For f = [C <$> f (FieldInfo $ \(C l) -> l)]
 
 instance ADT Dept where
   type Constraints Dept c = (c Name, c Manager, c [Unit])
-  buildsA For f = [(ctor "D", D 
+  ctorInfo _ 0 = ctor "D"
+  buildsA For f = [D 
     <$> f (FieldInfo $ \(D n _ _) -> n) 
     <*> f (FieldInfo $ \(D _ m _) -> m) 
-    <*> f (FieldInfo $ \(D _ _ u) -> u))]
+    <*> f (FieldInfo $ \(D _ _ u) -> u)]
 
 instance ADT Unit where
   ctorIndex PU{} = 0
   ctorIndex DU{} = 1
+  ctorInfo _ 0 = ctor "PU"
+  ctorInfo _ 1 = ctor "DU"
   type Constraints Unit c = (c Employee, c Dept)
   buildsA For f = 
-    [ (ctor "PU", PU <$> f (FieldInfo $ \(PU e) -> e))
-    , (ctor "DU", DU <$> f (FieldInfo $ \(DU d) -> d))
+    [ PU <$> f (FieldInfo $ \(PU e) -> e)
+    , DU <$> f (FieldInfo $ \(DU d) -> d)
     ]
 
 instance ADT Employee where
   type Constraints Employee c = (c Person, c Salary)
-  buildsA For f = [(ctor "E", E <$> f (FieldInfo $ \(E p _) -> p) <*> f (FieldInfo $ \(E _ s) -> s))]
+  ctorInfo _ 0 = ctor "E"
+  buildsA For f = [E <$> f (FieldInfo $ \(E p _) -> p) <*> f (FieldInfo $ \(E _ s) -> s)]
 
 instance ADT Person where
   type Constraints Person c = (c Name, c Address)
-  buildsA For f = [(ctor "P", P <$> f (FieldInfo $ \(P n _) -> n) <*> f (FieldInfo $ \(P _ a) -> a))]
+  ctorInfo _ 0 = ctor "P"
+  buildsA For f = [P <$> f (FieldInfo $ \(P n _) -> n) <*> f (FieldInfo $ \(P _ a) -> a)]
 
 instance ADT Salary where
   type Constraints Salary c = (c Float)
-  buildsA For f = [(ctor "S", S <$> f (FieldInfo $ \(S s) -> s))]
+  ctorInfo _ 0 = ctor "S"
+  buildsA For f = [S <$> f (FieldInfo $ \(S s) -> s)]
 
   
 class IncreaseSalary t where

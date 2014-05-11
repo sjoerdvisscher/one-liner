@@ -187,6 +187,7 @@ op2 for op s t = build for (\fld -> (s ! fld) `op` (t ! fld))
 
 
 
+
 infixl 9 !
 -- | Get the subcomponent by using the projector from the field information.
 (!) :: t -> FieldInfo (t -> s) -> s
@@ -259,6 +260,11 @@ instance ADT (Either a b) where
     [ Left  <$> f (FieldInfo (\(Left a)  -> a))
     , Right <$> f (FieldInfo (\(Right a) -> a))
     ]
+    
+instance ADT (a, b) where
+  
+  type Constraints (a, b) c = (c a, c b)
+  buildsA For f = [ (ctor "(,)", (,) <$> f (FieldInfo fst) <*> f (FieldInfo snd)) ]
 
 instance ADT (Maybe a) where
 

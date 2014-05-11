@@ -109,7 +109,7 @@ class ADT t where
 
   -- | The constraints needed to run `buildsA` and `buildsRecA`. 
   -- It should be a list of all the types of the subcomponents of @t@, each applied to @c@.
-  type Constraints t c :: Constraint
+  type Constraints t (c :: * -> Constraint) :: Constraint
   
   buildsA :: (Constraints t c, Applicative f)
           => For c -- ^ Witness for the constraint @c@.
@@ -137,6 +137,8 @@ class ADT t where
              -- result of applicatively applying the constructor to the results of the given function 
              -- for each field of the constructor.
   buildsRecA for sub _ = buildsA for sub
+  
+  {-# MINIMAL ctorIndex, (buildsA | buildsRecA) #-}
 
 -- | Add an instance for this class if the data type has exactly one constructor.
 --

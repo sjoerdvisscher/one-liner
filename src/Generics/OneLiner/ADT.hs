@@ -261,11 +261,6 @@ instance ADT (Either a b) where
     , Right <$> f (FieldInfo (\(Right a) -> a))
     ]
     
-instance ADT (a, b) where
-  
-  type Constraints (a, b) c = (c a, c b)
-  buildsA For f = [ (ctor "(,)", (,) <$> f (FieldInfo fst) <*> f (FieldInfo snd)) ]
-
 instance ADT (Maybe a) where
 
   ctorIndex Nothing = 0

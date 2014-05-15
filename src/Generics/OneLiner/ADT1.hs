@@ -90,7 +90,7 @@ newtype Extract f = Extract { getExtract :: forall x. f x -> x }
 -- Where @Show@ can be any class.
 data For (c :: (* -> *) -> Constraint) = For
 
--- | Type class for algebraic data types of kind @* -> *@. Minimal implementation: `ctorIndex` and either `buildsA`
+-- | Type class for algebraic data types of kind @* -> *@. Implement either `buildsA`
 -- if the type @t@ is not recursive, or `buildsRecA` if the type @t@ is recursive.
 class ADT1 t where
 
@@ -126,7 +126,7 @@ class ADT1 t where
              -> [f (t b)]
   buildsRecA for param sub _ = buildsA for param sub
   
-  {-# MINIMAL ctorIndex, (buildsA | buildsRecA) #-}
+  {-# MINIMAL ctorInfo, (buildsA | buildsRecA) #-}
 
 -- | Add an instance for this class if the data type has exactly one constructor.
 --

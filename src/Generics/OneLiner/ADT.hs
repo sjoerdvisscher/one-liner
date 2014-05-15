@@ -95,7 +95,7 @@ import Data.Maybe (fromJust)
 -- Where @Show@ can be any class.
 data For (c :: * -> Constraint) = For
 
--- | Type class for algebraic data types of kind @*@. Minimal implementation: `ctorIndex` and either `buildsA`
+-- | Type class for algebraic data types of kind @*@. Implement either `buildsA`
 -- if the type @t@ is not recursive, or `buildsRecA` if the type @t@ is recursive.
 class ADT t where
 
@@ -138,7 +138,7 @@ class ADT t where
              -- for each field of the constructor.
   buildsRecA for sub _ = buildsA for sub
   
-  {-# MINIMAL ctorIndex, (buildsA | buildsRecA) #-}
+  {-# MINIMAL ctorInfo, (buildsA | buildsRecA) #-}
 
 -- | Add an instance for this class if the data type has exactly one constructor.
 --

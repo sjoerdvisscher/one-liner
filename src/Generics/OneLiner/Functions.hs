@@ -1,7 +1,6 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Generics.OneLiner.Functions
--- Copyright   :  (c) Sjoerd Visscher 2012
 -- License     :  BSD-style (see the file LICENSE)
 --
 -- Maintainer  :  sjoerd@w3future.com
@@ -33,11 +32,11 @@ import Control.Monad.Trans.State
 import qualified Control.Monad.Trans.Class as T
 
 eqADT :: (ADT t, Constraints t Eq) => t -> t -> Bool
-eqADT s t = ctorIndex s == ctorIndex t && 
+eqADT s t = ctorIndex s == ctorIndex t &&
   getAll (mbuilds (For :: For Eq) (\fld -> All $ s ! fld == t ! fld) `at` s)
 
 compareADT :: (ADT t, Constraints t Ord) => t -> t -> Ordering
-compareADT s t = compare (ctorIndex s) (ctorIndex t) <> 
+compareADT s t = compare (ctorIndex s) (ctorIndex t) <>
   mbuilds (For :: For Ord) (\fld -> compare (s ! fld) (t ! fld)) `at` s
 
 minBoundADT :: (ADT t, Constraints t Bounded) => t
@@ -51,18 +50,18 @@ showsPrecADT d t = inner fty
   where
     CtorInfo name rec fty = ctorInfo t (ctorIndex t)
 
-    inner (Infix _ d') = showParen (d > d') $ let [f0, f1] = fields (d' + 1) in 
+    inner (Infix _ d') = showParen (d > d') $ let [f0, f1] = fields (d' + 1) in
       f0 . showChar ' ' . showString name . showChar ' ' . f1
     inner _ = showParen (d > 10) $ showString name . showChar ' ' . body
 
-    body = if rec 
+    body = if rec
       then showChar '{' . conc (showString ", ") (fields 0) . showChar '}'
       else conc (showString " ") (fields 11)
 
     fields d' = mbuilds (For :: For Show) (return . f d') `at` t
 
     f :: Show s => Int -> FieldInfo (t -> s) -> ShowS
-    f d' info = if rec 
+    f d' info = if rec
       then showString (selectorName info) . showString " = " . showsPrec d' (t ! info)
       else showsPrec d' (t ! info)
 
@@ -73,11 +72,11 @@ readPrecADT = parens (choice ctorReads)
   where
     ctorReads = ctorParse <$> zip (fmap (ctorInfo (undefined :: t)) [0..]) (buildsA (For :: For Read) fieldParse)
 
-    ctorParse (CtorInfo name _ (Infix _ d), getFields) = 
+    ctorParse (CtorInfo name _ (Infix _ d), getFields) =
       let flds = evalStateT getFields $ do { Symbol name' <- lexP; guard (name' == name) }
       in prec d flds
 
-    ctorParse (CtorInfo name rec _, getFields) = 
+    ctorParse (CtorInfo name rec _, getFields) =
       let flds = evalStateT getFields (return ())
       in prec (if rec then 11 else 10) $ do
         Ident name' <- lexP
@@ -98,7 +97,7 @@ readPrecADT = parens (choice ctorReads)
       Punc "=" <- lexP
       res <- reset readPrec
       parseOp
-      return (res, return ())  
+      return (res, return ())
     fieldParse _ = StateT $ \parseOp -> do
       res <- step readPrec
       parseOp

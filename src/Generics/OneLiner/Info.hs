@@ -1,7 +1,6 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Generics.OneLiner.Info
--- Copyright   :  (c) Sjoerd Visscher 2012
 -- License     :  BSD-style (see the file LICENSE)
 --
 -- Maintainer  :  sjoerd@w3future.com
@@ -26,11 +25,15 @@ data Fixity = Prefix | Infix Associativity Int
 data Associativity = LeftAssociative | RightAssociative | NotAssociative
   deriving (Eq, Show, Ord, Read)
 
-data FieldInfo p 
+data FieldInfo p
   = SelectorInfo
     { selectorName :: String
     , project      :: p
     }
   | FieldInfo
-    { project      :: p 
+    { project      :: p
     }
+
+instance Functor FieldInfo where
+  fmap f (SelectorInfo s p) = SelectorInfo s (f p)
+  fmap f (FieldInfo p) = FieldInfo (f p)

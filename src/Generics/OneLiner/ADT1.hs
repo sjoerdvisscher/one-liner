@@ -1,17 +1,16 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Generics.OneLiner.ADT1
--- Copyright   :  (c) Sjoerd Visscher 2012
 -- License     :  BSD-style (see the file LICENSE)
 --
 -- Maintainer  :  sjoerd@w3future.com
 -- Stability   :  experimental
 -- Portability :  non-portable
 --
--- This module is for writing generic functions on algebraic data types 
--- of kind @* -> *@. 
+-- This module is for writing generic functions on algebraic data types
+-- of kind @* -> *@.
 -- These data types must be an instance of the `ADT1` type class.
--- 
+--
 -- Here's an example how to write such an instance for this data type:
 --
 -- @
@@ -25,13 +24,13 @@
 --   `ctorInfo` _ 0 = `ctor` \"A\"
 --   `ctorInfo` _ 1 = `ctor` \"B\"
 --   type `Constraints` T c = (c [], c T)
---   `buildsRecA` `For` par sub rec = 
+--   `buildsRecA` _ par sub rec =
 --     [ A `<$>` sub (`component` (\\(A l) -> l)
 --     , B `<$>` par (`param` (\\(B a _) -> a)) `<*>` rec (`component` (\\(B _ t) -> t))
 --     ]
 -- @
 -----------------------------------------------------------------------------
-{-# LANGUAGE 
+{-# LANGUAGE
     RankNTypes
   , TypeFamilies
   , TypeOperators
@@ -46,26 +45,26 @@ module Generics.OneLiner.ADT1 (
     module Generics.OneLiner.Info
   , Constraint
     -- | The kind of constraints
-  
+
     -- * The @ADT1@ type class
   , ADT1(..)
   , ADT1Record(..)
   , For(..)
   , Extract(..)
   , (:~>)(..)
-  
+
     -- * Helper functions
   , (!)
   , (!~)
   , at
   , param
   , component
-  
+
   -- * Derived traversal schemes
   , builds
   , mbuilds
   , build
-  
+
   ) where
 
 import Generics.OneLiner.Info
@@ -97,35 +96,35 @@ class ADT1 t where
   -- | Gives the index of the constructor of the given value in the list returned by `buildsA` and `buildsRecA`.
   ctorIndex :: t a -> Int
   ctorIndex _ = 0
-  
+
   -- | @ctorInfo n@ gives constructor information, f.e. its name, for the @n@th constructor.
   --   The first argument is a dummy argument and can be @(undefined :: t a)@.
   ctorInfo :: t a -> Int -> CtorInfo
 
-  -- | The constraints needed to run `buildsA` and `buildsRecA`. 
+  -- | The constraints needed to run `buildsA` and `buildsRecA`.
   -- It should be a list of all the types of the subcomponents of @t@, each applied to @c@.
   type Constraints t (c :: (* -> *) -> Constraint) :: Constraint
   buildsA :: (Constraints t c, Applicative f)
-          => For c -- ^ Witness for the constraint @c@.
+          => for c -- ^ Witness for the constraint @c@.
           -> (FieldInfo (Extract t) -> f b)
           -> (forall s. c s => FieldInfo (t :~> s) -> f (s b))
           -> [f (t b)]
-          
+
   default buildsA :: (c t, Constraints t c, Applicative f)
-                  => For c
+                  => for c
                   -> (FieldInfo (Extract t) -> f b)
                   -> (forall s. c s => FieldInfo (t :~> s) -> f (s b))
                   -> [f (t b)]
-  buildsA for param sub = buildsRecA for param sub sub 
+  buildsA for param sub = buildsRecA for param sub sub
 
   buildsRecA :: (Constraints t c, Applicative f)
-             => For c -- ^ Witness for the constraint @c@.
+             => for c -- ^ Witness for the constraint @c@.
              -> (FieldInfo (Extract t) -> f b)
              -> (forall s. c s => FieldInfo (t :~> s) -> f (s b))
              -> (FieldInfo (t :~> t) -> f (t b))
              -> [f (t b)]
   buildsRecA for param sub _ = buildsA for param sub
-  
+
   {-# MINIMAL ctorInfo, (buildsA | buildsRecA) #-}
 
 -- | Add an instance for this class if the data type has exactly one constructor.
@@ -134,24 +133,24 @@ class ADT1 t where
 class ADT1 t => ADT1Record t where
 
 -- | `buildsA` specialized to the `Identity` applicative functor.
-builds :: (ADT1 t, Constraints t c) 
-       => For c
+builds :: (ADT1 t, Constraints t c)
+       => for c
        -> (FieldInfo (Extract t) -> b)
        -> (forall s. c s => FieldInfo (t :~> s) -> s b)
        -> [t b]
 builds for f g = runIdentity <$> buildsA for (Identity . f) (Identity . g)
 
 -- | `buildsA` specialized to the `Constant` applicative functor, which collects monoid values @m@.
-mbuilds :: forall t c m. (ADT1 t, Constraints t c, Monoid m) 
-        => For c
+mbuilds :: forall t c m for. (ADT1 t, Constraints t c, Monoid m)
+        => for c
         -> (FieldInfo (Extract t) -> m)
         -> (forall s. c s => FieldInfo (t :~> s) -> m)
         -> [m]
 mbuilds for f g = getConstant <$> (buildsA for (Constant . f) (Constant . g) :: [Constant m (t b)])
 
 -- | `builds` for data types with exactly one constructor
-build :: (ADT1Record t, Constraints t c) 
-       => For c
+build :: (ADT1Record t, Constraints t c)
+       => for c
        -> (FieldInfo (Extract t) -> b)
        -> (forall s. c s => FieldInfo (t :~> s) -> s b)
        -> t b
@@ -177,27 +176,27 @@ t !~ info = getNat (project info) t
 
 
 instance ADT1 Maybe where
-  
+
   ctorIndex Nothing = 0
   ctorIndex Just{}  = 1
   ctorInfo _ 0 = ctor "Nothing"
   ctorInfo _ 1 = ctor "Just"
-  
+
   type Constraints Maybe c = ()
-  buildsA For f _ = 
+  buildsA _ f _ =
     [ pure Nothing
     , Just <$> f (param fromJust)
     ]
-  
+
 instance ADT1 [] where
-  
+
   ctorIndex []    = 0
   ctorIndex (_:_) = 1
   ctorInfo _ 0 = ctor "[]"
   ctorInfo _ 1 = CtorInfo ":" False (Infix RightAssociative 5)
-  
+
   type Constraints [] c = c []
-  buildsRecA For p _ r = 
+  buildsRecA _ p _ r =
     [ pure []
     , (:) <$> p (param head) <*> r (component tail)
     ]

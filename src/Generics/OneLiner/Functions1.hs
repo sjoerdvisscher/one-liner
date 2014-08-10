@@ -1,7 +1,6 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Generics.OneLiner.Functions1
--- Copyright   :  (c) Sjoerd Visscher 2013
 -- License     :  BSD-style (see the file LICENSE)
 --
 -- Maintainer  :  sjoerd@w3future.com

@@ -57,7 +57,7 @@ instance MonadLogic m => Decidable (CoSeries m) where
 
 gcoseries :: forall t m r. (ADT t, Constraints t (CoSerial m), MonadLogic m)
           => Series m r -> Series m (t -> r)
-gcoseries = runCoSeries $ createD (For :: For (CoSerial m)) (CoSeries coseries)
+gcoseries = runCoSeries $ consume (For :: For (CoSerial m)) (CoSeries coseries)
 
 
 -- http://hackage.haskell.org/package/hashable-1.2.2.0/docs/src/Data-Hashable-Generic.html

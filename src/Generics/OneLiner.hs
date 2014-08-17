@@ -152,6 +152,9 @@ instance DeepConstraint c t => Deep c t
 type family DeepConstraint (c :: * -> Constraint) t :: Constraint
 type instance DeepConstraint c t = (c t, ADT t, Constraints t (Deep c), Constraints t c)
 
+-- | For primitive values like `Int`, `Float`, `Double` and `Char`, the generic representation
+-- of a value contains itself. If you use generics recursively (f.e. using `Deep`),
+-- use `isAtom` to detect primitive values and prevent an infinite loop.
 isAtom :: forall t proxy. (ADT t, Typeable t, Constraints t Typeable) => proxy t -> Bool
 isAtom pt = case createA (For :: For Typeable) f :: [Const [Bool] t] of
   [Const [True]] -> True

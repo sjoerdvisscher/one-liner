@@ -31,6 +31,8 @@ module Generics.OneLiner (
   gmap, gfoldMap, gtraverse,
   -- * Combining values
   gzipWith, mzipWith, zipWithA,
+  -- * Consuming values
+  consume,
   -- * Single constructor functions
   op0, op1, op2,
   -- * Types
@@ -43,6 +45,8 @@ import Control.Applicative
 import Data.Functor.Identity
 import Data.Monoid
 import Data.Typeable
+import Data.Functor.Contravariant
+import Data.Functor.Contravariant.Divisible
 
 type family Constraints' (t :: * -> *) (c :: * -> Constraint) :: Constraint
 type instance Constraints' V1 c = ()
@@ -63,12 +67,15 @@ class ADT' (t :: * -> *) where
      => for c -> (forall s. c s => s -> f s) -> t x -> f (t x)
   f2 :: (Constraints' t c, Applicative f)
      => for c -> (forall s. c s => s -> s -> f s) -> t x -> t x -> Maybe (f (t x))
+  c0 :: (Constraints' t c, Decidable f)
+     => for c -> (forall s. c s => f s) -> f (t ())
 
 instance ADT' V1 where
   ctorCount _ = 0
   f0 _ _ = []
   f1 _ _ = pure
   f2 _ _ _ = Just . pure
+  c0 _ _ = lose (\v -> v `seq` undefined)
 
 instance (ADT' f, ADT' g) => ADT' (f :+: g) where
   ctorIndex' (L1 l) = ctorIndex' l
@@ -80,21 +87,27 @@ instance (ADT' f, ADT' g) => ADT' (f :+: g) where
   f2 for f (L1 a) (L1 b) = fmap (fmap L1) (f2 for f a b)
   f2 for f (R1 a) (R1 b) = fmap (fmap R1) (f2 for f a b)
   f2 _ _ _ _ = Nothing
+  c0 for f = choose h (c0 for f) (c0 for f) where
+    h (L1 l) = Left l
+    h (R1 r) = Right r
 
 instance ADT' U1 where
   f0 _ _ = [pure U1]
   f1 _ _ = pure
   f2 _ _ _ = Just . pure
+  c0 _ _ = conquer
 
 instance (ADT' f, ADT' g) => ADT' (f :*: g) where
   f0 for f = [(:*:) <$> head (f0 for f) <*> head (f0 for f)]
   f1 for f (l :*: r) = (:*:) <$> f1 for f l <*> f1 for f r
   f2 for f (al :*: ar) (bl :*: br) = liftA2 (:*:) <$> f2 for f al bl <*> f2 for f ar br
+  c0 for f = divide (\(l :*: r) -> (l, r)) (c0 for f) (c0 for f)
 
 instance ADT' (K1 i v) where
   f0 _ f = [K1 <$> f]
   f1 _ f (K1 v) = K1 <$> f v
   f2 _ f (K1 l) (K1 r) = Just $ K1 <$> f l r
+  c0 _ f = contramap unK1 f
 
 instance ADT' f => ADT' (M1 i t f) where
   ctorIndex' = ctorIndex' . unM1
@@ -102,7 +115,7 @@ instance ADT' f => ADT' (M1 i t f) where
   f0 for f = map (fmap M1) (f0 for f)
   f1 for f = fmap M1 . f1 for f . unM1
   f2 for f (M1 l) (M1 r) = fmap (fmap M1) (f2 for f l r)
-
+  c0 for f = contramap unM1 (c0 for f)
 
 class ADTRecord' (f :: * -> *) where
 instance ADTRecord' U1
@@ -168,6 +181,12 @@ create for f = map runIdentity (createA for (Identity f))
 createA :: (ADT t, Constraints t c, Applicative f)
         => for c -> (forall s. c s => f s) -> [f t]
 createA for f = map (fmap to) (f0 for f)
+
+-- | Generate ways to consume values of type `t`. This is the contravariant version of `createA`.
+consume :: (ADT t, Constraints t c, Decidable f)
+        => for c -> (forall s. c s => f s) -> f t
+consume for f = contramap from (c0 for f)
+
 
 -- | Get the index in the lists returned by `create` and `createA` of the constructor of the given value.
 --

@@ -11,6 +11,9 @@ import Control.Monad.Logic.Class
 import Control.Applicative
 import Control.Monad
 import Data.Hashable
+import Data.Functor.Contravariant
+import Data.Functor.Contravariant.Divisible
+import Data.Void
 
 
 -- http://hackage.haskell.org/package/lens-4.3.3/docs/Generics-Deriving-Lens.html
@@ -36,6 +39,25 @@ instance MonadLogic m => Applicative (Fair m) where
 
 gseries :: forall t m. (ADT t, Constraints t (Serial m), MonadLogic m) => Series m t
 gseries = foldr ((\/) . decDepth . runFair) mzero $ createA (For :: For (Serial m)) (Fair series)
+
+newtype CoSeries m a = CoSeries { runCoSeries :: forall r. Series m r -> Series m (a -> r) }
+instance Contravariant (CoSeries m) where
+  contramap f (CoSeries g) = CoSeries $ fmap (. f) . g
+instance MonadLogic m => Divisible (CoSeries m) where
+  divide f (CoSeries g) (CoSeries h) = CoSeries $ \rs -> do
+    rs' <- fixDepth rs
+    f2 <- decDepthChecked (constM $ constM rs') (g $ h rs')
+    return $ uncurry f2 . f
+  conquer = CoSeries constM
+instance MonadLogic m => Decidable (CoSeries m) where
+  choose f (CoSeries g) (CoSeries h) = CoSeries $ \rs ->
+    (\br cr -> either br cr . f) <$> g rs <~> h rs
+  lose f = CoSeries $ \_ ->
+    return $ absurd . f
+
+gcoseries :: forall t m r. (ADT t, Constraints t (CoSerial m), MonadLogic m)
+          => Series m r -> Series m (t -> r)
+gcoseries = runCoSeries $ createD (For :: For (CoSerial m)) (CoSeries coseries)
 
 
 -- http://hackage.haskell.org/package/hashable-1.2.2.0/docs/src/Data-Hashable-Generic.html

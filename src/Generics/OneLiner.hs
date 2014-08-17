@@ -13,13 +13,16 @@
 --
 -----------------------------------------------------------------------------
 {-# LANGUAGE
-    RankNTypes
+    GADTs
+  , RankNTypes
   , TypeFamilies
   , TypeOperators
   , ConstraintKinds
   , FlexibleContexts
   , FlexibleInstances
   , ScopedTypeVariables
+  , UndecidableInstances
+  , MultiParamTypeClasses
   #-}
 module Generics.OneLiner (
   -- * Producing values
@@ -31,7 +34,7 @@ module Generics.OneLiner (
   -- * Single constructor functions
   op0, op1, op2,
   -- * Types
-  ADT, ADTRecord, Constraints, For(..)
+  ADT, ADTRecord, Constraints, For(..), Deep, DeepConstraint, isAtom
 ) where
 
 import GHC.Generics
@@ -39,6 +42,7 @@ import GHC.Prim (Constraint)
 import Control.Applicative
 import Data.Functor.Identity
 import Data.Monoid
+import Data.Typeable
 
 type family Constraints' (t :: * -> *) (c :: * -> Constraint) :: Constraint
 type instance Constraints' V1 c = ()
@@ -125,6 +129,24 @@ type ADTRecord t = (ADT t, ADTRecord' (Rep t))
 --
 -- Where @Show@ can be any class.
 data For (c :: * -> Constraint) = For
+
+-- | @Deep c@ recursively requires all parts of the datatype to be an instance of `c` and of `Generic`.
+class DeepConstraint c t => Deep (c :: * -> Constraint) t where
+instance DeepConstraint c t => Deep c t
+
+-- http://stackoverflow.com/questions/14133121/can-i-constrain-a-type-family
+-- | A trick to avoid GHC from detecting a cycle.
+type family DeepConstraint (c :: * -> Constraint) t :: Constraint
+type instance DeepConstraint c t = (c t, ADT t, Constraints t (Deep c), Constraints t c)
+
+isAtom :: forall t proxy. (ADT t, Typeable t, Constraints t Typeable) => proxy t -> Bool
+isAtom pt = case createA (For :: For Typeable) f :: [Const [Bool] t] of
+  [Const [True]] -> True
+  _ -> False
+  where
+    f :: forall a. Typeable a => Const [Bool] a
+    f = Const [tRep == typeRep (undefined :: [a])]
+    tRep = typeRep pt
 
 -- | Create a value (one for each constructor), given how to construct the components.
 --

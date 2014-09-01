@@ -14,6 +14,7 @@
 -----------------------------------------------------------------------------
 {-# LANGUAGE
     GADTs
+  , DataKinds
   , RankNTypes
   , TypeFamilies
   , TypeOperators
@@ -36,14 +37,16 @@ module Generics.OneLiner (
   -- * Single constructor functions
   op0, op1, op2,
   -- * Types
-  ADT, ADTRecord, Constraints, For(..), Deep, DeepConstraint, isAtom
+  ADT, ADTRecord, ADTNonEmpty, CtorCount, Constraints, For(..), Deep, DeepConstraint, isAtom
 ) where
 
 import GHC.Generics
 import GHC.Prim (Constraint)
+import GHC.TypeLits
 import Control.Applicative
 import Data.Functor.Identity
 import Data.Monoid
+import Data.Proxy
 import Data.Typeable
 import Data.Functor.Contravariant
 import Data.Functor.Contravariant.Divisible
@@ -57,9 +60,11 @@ type instance Constraints' (K1 i v) c = c v
 type instance Constraints' (M1 i t f) c = Constraints' f c
 
 class ADT' (t :: * -> *) where
+  type CtorCount' t :: Nat
+  type CtorCount' t = 1
   ctorIndex' :: t x -> Int
   ctorIndex' _ = 0
-  ctorCount :: proxy (t x) -> Int
+  ctorCount :: proxy t -> Int
   ctorCount _ = 1
   f0 :: (Constraints' t c, Applicative f)
      => for c -> (forall s. c s => f s) -> [f (t ())]
@@ -71,6 +76,7 @@ class ADT' (t :: * -> *) where
      => for c -> (forall s. c s => f s) -> f (t ())
 
 instance ADT' V1 where
+  type CtorCount' V1 = 0
   ctorCount _ = 0
   f0 _ _ = []
   f1 _ _ = pure
@@ -78,9 +84,10 @@ instance ADT' V1 where
   c0 _ _ = lose (\v -> v `seq` undefined)
 
 instance (ADT' f, ADT' g) => ADT' (f :+: g) where
+  type CtorCount' (f :+: g) = CtorCount' f + CtorCount' g
   ctorIndex' (L1 l) = ctorIndex' l
-  ctorIndex' (R1 r) = ctorCount (undefined :: [f ()]) + ctorIndex' r
-  ctorCount _ = ctorCount (undefined :: [f ()]) + ctorCount (undefined :: [g ()])
+  ctorIndex' (R1 r) = ctorCount (Proxy :: Proxy f) + ctorIndex' r
+  ctorCount _ = ctorCount (Proxy :: Proxy f) + ctorCount (Proxy :: Proxy g)
   f0 for f = map (fmap L1) (f0 for f) ++ map (fmap R1) (f0 for f)
   f1 for f (L1 l) = L1 <$> f1 for f l
   f1 for f (R1 r) = R1 <$> f1 for f r
@@ -110,20 +117,13 @@ instance ADT' (K1 i v) where
   c0 _ f = contramap unK1 f
 
 instance ADT' f => ADT' (M1 i t f) where
+  type CtorCount' (M1 i t f) = CtorCount' f
   ctorIndex' = ctorIndex' . unM1
-  ctorCount _ = ctorCount (undefined :: [M1 i t f ()])
+  ctorCount _ = ctorCount (Proxy :: Proxy f)
   f0 for f = map (fmap M1) (f0 for f)
   f1 for f = fmap M1 . f1 for f . unM1
   f2 for f (M1 l) (M1 r) = fmap (fmap M1) (f2 for f l r)
   c0 for f = contramap unM1 (c0 for f)
-
-class ADTRecord' (f :: * -> *) where
-instance ADTRecord' U1
-instance ADTRecord' (f :*: g)
-instance ADTRecord' (K1 i v)
-instance ADTRecord' f => ADTRecord' (M1 i t f)
-instance ADTRecord' f => ADTRecord' (V1 :+: f)
-instance ADTRecord' f => ADTRecord' (f :+: V1)
 
 -- | `Constraints` is a constraint type synonym, containing the constraint requirements for an instance for `t` of class `c`.
 -- It requires an instance of class `c` for each component of `t`.
@@ -133,8 +133,16 @@ type Constraints t c = Constraints' (Rep t) c
 -- and any generic representation will be an instance of `ADT'`.
 type ADT t = (Generic t, ADT' (Rep t))
 
--- | `ADTRecord` is a constraint type synonym. An instance is an `ADT` with exactly one constructor.
-type ADTRecord t = (ADT t, ADTRecord' (Rep t))
+-- | `CtorCount` is the number of constructors of a type at the type level.
+-- F.e. if you want to require that a type has at least two constructors,
+-- you can add the constraint @(2 `GHC.TypeLits.<=` `CtorCount` t)@.
+type CtorCount t = CtorCount' (Rep t)
+
+-- | `ADTRecord` is a constraint type synonym. An instance is an `ADT` with *exactly* one constructor.
+type ADTRecord t = (ADT t, 1 ~ CtorCount t)
+
+-- | `ADTNonEmpty` is a constraint type synonym. An instance is an `ADT` with *at least* one constructor.
+type ADTNonEmpty t = (ADT t, 1 <= CtorCount t)
 
 -- | Tell the compiler which class we want to use in the traversal. Should be used like this:
 --

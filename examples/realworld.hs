@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, RankNTypes, ScopedTypeVariables, ConstraintKinds, TypeOperators, FlexibleContexts, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GADTs, RankNTypes, ScopedTypeVariables, ConstraintKinds, TypeOperators, FlexibleContexts, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances #-}
 
 import Generics.OneLiner
 
@@ -14,7 +14,7 @@ import Data.Hashable
 import Data.Functor.Contravariant
 import Data.Functor.Contravariant.Divisible
 import Data.Void
-
+import Data.Binary
 
 -- http://hackage.haskell.org/package/lens-4.3.3/docs/Generics-Deriving-Lens.html
 whenCastableOrElse :: forall a b f. (Typeable a, Typeable b) => (b -> f b) -> (a -> f a) -> a -> f a
@@ -27,6 +27,7 @@ tinplate f
 
 
 -- http://hackage.haskell.org/package/deepseq-generics-0.1.1.1/docs/src/Control-DeepSeq-Generics.html
+-- This would work if the monoid instance of () would have been strict, now it doesn't...
 grnf :: (ADT t, Constraints t NFData) => t -> ()
 grnf = gfoldMap (For :: For NFData) rnf
 
@@ -64,3 +65,14 @@ gcoseries = runCoSeries $ consume (For :: For (CoSerial m)) (CoSeries coseries)
 ghashWithSalt :: (ADT t, Constraints t Hashable) => Int -> t -> Int
 ghashWithSalt = flip $ \t -> flip hashWithSalt (ctorIndex t) .
   appEndo (gfoldMap (For :: For Hashable) (Endo . flip hashWithSalt) t)
+
+-- http://hackage.haskell.org/package/binary-0.7.2.1/docs/Data-Binary.html
+gget :: (ADT t, Constraints t Binary) => Get t
+gget = getWord8 >>= \ix -> createA (For :: For Binary) get !! fromEnum ix
+
+instance Monoid Put where
+  mempty = return ()
+  mappend = (>>)
+
+gput :: (ADT t, Constraints t Binary) => t -> Put
+gput t = putWord8 (toEnum (ctorIndex t)) <> gfoldMap (For :: For Binary) put t

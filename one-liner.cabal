@@ -1,5 +1,5 @@
 Name:                 one-liner
-Version:              0.5
+Version:              0.5.1
 Synopsis:             Constraint-based generics
 Description:          Write short and concise generic instances of type classes.
                       .
@@ -36,7 +36,7 @@ Library
   Build-depends:
       base         >= 4.7 && < 5
     , transformers >= 0.3 && < 0.5
-    , contravariant >= 1.2 && < 1.3
+    , contravariant >= 1.2 && < 1.4
     , ghc-prim
 
 source-repository head

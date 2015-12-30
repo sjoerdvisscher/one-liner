@@ -15,6 +15,8 @@ import Data.Functor.Contravariant
 import Data.Functor.Contravariant.Divisible
 import Data.Void
 import Data.Binary
+import Test.QuickCheck.Arbitrary
+import Test.QuickCheck.Gen
 
 -- http://hackage.haskell.org/package/lens-4.3.3/docs/Generics-Deriving-Lens.html
 whenCastableOrElse :: forall a b f. (Typeable a, Typeable b) => (b -> f b) -> (a -> f a) -> a -> f a
@@ -76,3 +78,20 @@ instance Monoid Put where
 
 gput :: (ADT t, Constraints t Binary) => t -> Put
 gput t = putWord8 (toEnum (ctorIndex t)) <> gfoldMap (For :: For Binary) put t
+
+-- https://hackage.haskell.org/package/QuickCheck-2.8.1/docs/Test-QuickCheck-Arbitrary.html
+newtype CoArb a = CoArb { unCoArb :: forall b. a -> Gen b -> Gen b }
+instance Contravariant CoArb where
+  contramap f (CoArb g) = CoArb $ \a -> g (f a)
+instance Divisible CoArb where
+  divide f (CoArb g) (CoArb h) = CoArb $ \a -> case f a of
+    (b, c) -> g b . h c
+  conquer = CoArb $ const id
+instance Decidable CoArb where
+  choose f (CoArb g) (CoArb h) = CoArb $ \a -> case f a of
+    Left b -> variant 0 . g b
+    Right c -> variant 1 . h c
+  lose f = CoArb $ absurd . f
+
+gcoarbitrary :: (ADT t, Constraints t CoArbitrary) => t -> Gen b -> Gen b
+gcoarbitrary = unCoArb $ consume (For :: For CoArbitrary) (CoArb coarbitrary)

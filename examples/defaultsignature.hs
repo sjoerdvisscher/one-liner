@@ -22,7 +22,7 @@ class EnumAll t where
   enumAll :: [t]
 
   default enumAll :: (ADT t, Constraints t EnumAll) => [t]
-  enumAll = concat $ createA (For :: For EnumAll) enumAll
+  enumAll = concat $ createA (For :: For EnumAll) [enumAll]
 
 instance EnumAll Bool
 instance EnumAll a => EnumAll (Maybe a)

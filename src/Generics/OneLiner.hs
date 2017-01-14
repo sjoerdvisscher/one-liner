@@ -21,18 +21,22 @@
 module Generics.OneLiner (
   -- * Producing values
   create, createA, ctorIndex,
+  create1, createA1, ctorIndex1,
   -- * Traversing values
   gmap, gfoldMap, gtraverse,
+  gmap1, gfoldMap1, gtraverse1,
   -- * Combining values
   gzipWith, mzipWith, zipWithA,
   -- * Consuming values
-  consume,
+  consume, consume1,
   -- * Single constructor functions
-  op0, op1, op2, algebra,
+  nullaryOp, unaryOp, binaryOp, algebra, gcotraverse1,
   -- * Generic programming with profunctors
-  GenericRecordProfunctor(..), GenericNonEmptyProfunctor(..), GenericProfunctor(..), generic, nonEmpty, record,
+  GenericRecordProfunctor(..), record, record1,
+  GenericNonEmptyProfunctor(..), nonEmpty, nonEmpty1,
+  GenericProfunctor(..), generic, generic1,
   -- * Types
-  ADT, ADTRecord, ADTNonEmpty, CtorCount, Constraints, For(..)
+  ADT, ADTRecord, ADTNonEmpty, Constraints, For(..)
 ) where
 
 import GHC.Generics
@@ -73,6 +77,17 @@ consume :: (ADT t, Constraints t c, Decidable f)
         => for c -> (forall s. c s => f s) -> f t
 consume for f = runClown $ generic for $ Clown f
 
+create1 :: (ADT1 t, Constraints1 t c)
+        => for c -> (forall b s. c s => [b] -> [s b]) -> [a] -> [t a]
+create1 for f g = runJoker $ generic1 for (Joker . f . runJoker) (Joker g)
+
+createA1 :: (ADT1 t, Constraints1 t c, Applicative f)
+         => for c -> (forall b s. c s => [f b] -> [f (s b)]) -> [f a] -> [f (t a)]
+createA1 for f g = getCompose . runJoker $ generic1 for (Joker . Compose . f . getCompose . runJoker) (Joker . Compose $ g)
+
+consume1 :: (ADT1 t, Constraints1 t c, Decidable f)
+         => for c -> (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
+consume1 for f g = runClown $ generic1 for (Clown . f . runClown) (Clown g)
 
 
 -- | Map over a structure, updating each component.
@@ -95,6 +110,22 @@ gfoldMap for f = getConst . gtraverse for (Const . f)
 gtraverse :: (ADT t, Constraints t c, Applicative f)
           => for c -> (forall s. c s => s -> f s) -> t -> f t
 gtraverse for f = runStar $ generic for $ Star f
+
+gmap1 :: (ADT1 t, Constraints1 t c)
+     => for c -> (forall d e s. c s => (d -> e) -> s d -> s e) -> (a -> b) -> t a -> t b
+gmap1 = generic1
+
+gfoldMap1 :: (ADT1 t, Constraints1 t c, Monoid m)
+          => for c -> (forall s b. c s => (b -> m) -> s b -> m) -> (a -> m) -> t a -> m
+gfoldMap1 for f g = getConst . gtraverse1 for ((Const .) . f . (getConst .)) (Const . g)
+
+-- |
+-- @
+-- traverse = `gtraverse1` (`For` :: `For` `Traversable`) `traverse`
+-- @
+gtraverse1 :: (ADT1 t, Constraints1 t c, Applicative f)
+           => for c -> (forall d e s. c s => (d -> f e) -> s d -> f (s e)) -> (a -> f b) -> t a -> f (t b)
+gtraverse1 for f g = runStar $ generic1 for (Star . f . runStar) (Star g)
 
 -- | Combine two values by combining each component of the structures with the given function.
 -- Returns `Nothing` if the constructors don't match.
@@ -122,7 +153,7 @@ newtype Zip f a b = Zip { runZip :: a -> a -> Maybe (f b) }
 instance Functor f => Profunctor (Zip f) where
   dimap f g (Zip h) = Zip $ \a1 a2 -> fmap (fmap g) (h (f a1) (f a2))
 instance Applicative f => GenericRecordProfunctor (Zip f) where
-  unit = Zip . const $ Just . pure
+  unit = Zip $ \_ _ -> Just (pure U1)
   mult (Zip f) (Zip g) = Zip $ \(al :*: ar) (bl :*: br) -> liftA2 (:*:) <$> f al bl <*> g ar br
 instance Applicative f => GenericNonEmptyProfunctor (Zip f) where
   plus (Zip f) (Zip g) = Zip h where
@@ -130,38 +161,38 @@ instance Applicative f => GenericNonEmptyProfunctor (Zip f) where
     h (R1 a) (R1 b) = fmap (fmap R1) (g a b)
     h _ _ = Nothing
 instance Applicative f => GenericProfunctor (Zip f) where
-  zero = Zip . const $ Just . pure
+  zero = Zip absurd
 
 
 -- | Implement a nullary operator by calling the operator for each component.
 --
 -- @
--- `mempty` = `op0` (`For` :: `For` `Monoid`) `mempty`
--- `fromInteger` i = `op0` (`For` :: `For` `Num`) (`fromInteger` i)
+-- `mempty` = `nullaryOp` (`For` :: `For` `Monoid`) `mempty`
+-- `fromInteger` i = `nullaryOp` (`For` :: `For` `Num`) (`fromInteger` i)
 -- @
-op0 :: (ADTRecord t, Constraints t c)
-    => for c -> (forall s. c s => s) -> t
-op0 for f = unTagged $ record for $ Tagged f
+nullaryOp :: (ADTRecord t, Constraints t c)
+          => for c -> (forall s. c s => s) -> t
+nullaryOp for f = unTagged $ record for $ Tagged f
 
 -- | Implement a unary operator by calling the operator on the components.
 -- This is here for consistency, it is the same as `gmap`.
 --
 -- @
--- `negate` = `op1` (`For` :: `For` `Num`) `negate`
+-- `negate` = `unaryOp` (`For` :: `For` `Num`) `negate`
 -- @
-op1 :: (ADTRecord t, Constraints t c)
-     => for c -> (forall s. c s => s -> s) -> t -> t
-op1 = record
+unaryOp :: (ADTRecord t, Constraints t c)
+        => for c -> (forall s. c s => s -> s) -> t -> t
+unaryOp = record
 
 -- | Implement a binary operator by calling the operator on the components.
 --
 -- @
--- `mappend` = `op2` (`For` :: `For` `Monoid`) `mappend`
--- (`+`) = `op2` (`For` :: `For` `Num`) (`+`)
+-- `mappend` = `binaryOp` (`For` :: `For` `Monoid`) `mappend`
+-- (`+`) = `binaryOp` (`For` :: `For` `Num`) (`+`)
 -- @
-op2 :: (ADTRecord t, Constraints t c)
-    => for c -> (forall s. c s => s -> s -> s) -> t -> t -> t
-op2 for f l r = algebra for (\(Pair a b) -> f a b) (Pair l r)
+binaryOp :: (ADTRecord t, Constraints t c)
+         => for c -> (forall s. c s => s -> s -> s) -> t -> t -> t
+binaryOp for f l r = algebra for (\(Pair a b) -> f a b) (Pair l r)
 
 data Pair a = Pair a a
 instance Functor Pair where
@@ -173,5 +204,9 @@ instance Functor Pair where
 -- `op2` for f l r = `algebra` for (\\(Pair a b) -> f a b) (Pair l r)
 -- @
 algebra :: (ADTRecord t, Constraints t c, Functor f)
-    => for c -> (forall s. c s => f s -> s) -> f t -> t
+        => for c -> (forall s. c s => f s -> s) -> f t -> t
 algebra for f = runCostar $ record for $ Costar f
+
+gcotraverse1 :: (ADTRecord1 t, Constraints1 t c, Functor f)
+             => for c -> (forall d e s. c s => (f d -> e) -> f (s d) -> s e) -> (f a -> b) -> f (t a) -> t b
+gcotraverse1 for f p = runCostar $ record1 for (Costar . f . runCostar) (Costar p)

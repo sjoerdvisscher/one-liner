@@ -5,11 +5,13 @@ import Generics.OneLiner
 import Data.Monoid
 -- import Control.Lens (Traversal')
 -- import Data.Typeable
+import Control.Applicative
 import Control.DeepSeq
 import Test.SmallCheck.Series
 import Control.Monad.Logic.Class
 import Control.Monad
 import Data.Hashable
+import Data.Functor.Compose
 import Data.Functor.Contravariant
 import Data.Functor.Contravariant.Divisible
 import Data.Void
@@ -29,24 +31,22 @@ newtype Fair m a = Fair { runFair :: Series m a } deriving Functor
 instance MonadLogic m => Applicative (Fair m) where
   pure a = Fair $ pure a
   Fair fs <*> Fair as = Fair $ fs <~> as
+instance MonadLogic m => Alternative (Fair m) where
+  empty = Fair mzero
+  Fair l <|> Fair r = Fair $ l \/ r
 
 gseries :: forall t m. (ADT t, Constraints t (Serial m), MonadLogic m) => Series m t
-gseries = foldr ((\/) . decDepth . runFair) mzero $ createA (For :: For (Serial m)) [Fair series]
+gseries = decDepth $ runFair $ createA (For :: For (Serial m)) (Fair series)
 
 newtype CoSeries m a = CoSeries { runCoSeries :: forall r. Series m r -> Series m (a -> r) }
 instance Contravariant (CoSeries m) where
   contramap f (CoSeries g) = CoSeries $ fmap (. f) . g
 instance Divisible (CoSeries m) where
-  divide f (CoSeries g) (CoSeries h) = CoSeries $ \rs -> do
-    rs' <- fixDepth rs
-    f2 <- decDepthChecked (constM $ constM rs') (g $ h rs')
-    return $ uncurry f2 . f
+  divide f (CoSeries g) (CoSeries h) = CoSeries $ \rs -> (\bcr -> uncurry bcr . f) <$> g (h rs)
   conquer = CoSeries constM
 instance MonadLogic m => Decidable (CoSeries m) where
-  choose f (CoSeries g) (CoSeries h) = CoSeries $ \rs ->
-    (\br cr -> either br cr . f) <$> g rs <~> h rs
-  lose f = CoSeries $ \_ ->
-    return $ absurd . f
+  choose f (CoSeries g) (CoSeries h) = CoSeries $ \rs -> (\br cr -> either br cr . f) <$> g rs <~> h rs
+  lose f = CoSeries $ \_ -> return $ absurd . f
 
 gcoseries :: forall t m r. (ADT t, Constraints t (CoSerial m), MonadLogic m)
           => Series m r -> Series m (t -> r)
@@ -60,7 +60,7 @@ ghashWithSalt = flip $ \t -> flip hashWithSalt (ctorIndex t) .
 
 -- http://hackage.haskell.org/package/binary-0.7.2.1/docs/Data-Binary.html
 gget :: (ADT t, Constraints t Binary) => Get t
-gget = getWord8 >>= \ix -> createA (For :: For Binary) [get] !! fromEnum ix
+gget = getWord8 >>= \ix -> getCompose (createA (For :: For Binary) (Compose [get])) !! fromEnum ix
 
 gput :: (ADT t, Constraints t Binary) => t -> Put
 gput t = putWord8 (toEnum (ctorIndex t)) <> gfoldMap (For :: For Binary) put t

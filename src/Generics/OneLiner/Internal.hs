@@ -19,6 +19,7 @@
   , TypeOperators
   , ConstraintKinds
   , FlexibleContexts
+  , FlexibleInstances
   , ScopedTypeVariables
   , UndecidableInstances
   #-}
@@ -29,36 +30,11 @@ import GHC.Types (Constraint)
 import Control.Applicative
 import Data.Bifunctor.Clown
 import Data.Bifunctor.Joker
+import Data.Bifunctor.Product
+import Data.Bifunctor.Tannen
 import Data.Functor.Contravariant.Divisible
-import Data.Proxy
 import Data.Profunctor
 import Data.Tagged
-
-
-class CtorIndex (t :: * -> *) where
-  ctorIndex' :: t x -> Int
-  ctorIndex' _ = 0
-  ctorCount :: proxy t -> Int
-  ctorCount _ = 1
-
-instance CtorIndex V1 where
-  ctorCount _ = 0
-
-instance (CtorIndex f, CtorIndex g) => CtorIndex (f :+: g) where
-  ctorIndex' (L1 l) = ctorIndex' l
-  ctorIndex' (R1 r) = ctorCount (Proxy :: Proxy f) + ctorIndex' r
-  ctorCount _ = ctorCount (Proxy :: Proxy f) + ctorCount (Proxy :: Proxy g)
-
-instance CtorIndex f => CtorIndex (M1 i t f) where
-  ctorIndex' = ctorIndex' . unM1
-  ctorCount _ = ctorCount (Proxy :: Proxy f)
-
-instance CtorIndex U1
-instance CtorIndex (K1 i a)
-instance CtorIndex (f :*: g)
-instance CtorIndex (f :.: g)
-instance CtorIndex Par1
-instance CtorIndex (Rec1 f)
 
 
 type family Constraints' (t :: * -> *) (c :: * -> Constraint) :: Constraint
@@ -69,7 +45,7 @@ type instance Constraints' (f :*: g) c = (Constraints' f c, Constraints' g c)
 type instance Constraints' (K1 i a) c = c a
 type instance Constraints' (M1 i t f) c = Constraints' f c
 
-class CtorIndex t => ADT' (t :: * -> *) where
+class ADT' (t :: * -> *) where
   generic' :: (Constraints' t c, GenericProfunctor p)
     => for c -> (forall s. c s => p s s) -> p (t x) (t x)
 
@@ -105,12 +81,12 @@ type instance Constraints1' V1 c = ()
 type instance Constraints1' U1 c = ()
 type instance Constraints1' (f :+: g) c = (Constraints1' f c, Constraints1' g c)
 type instance Constraints1' (f :*: g) c = (Constraints1' f c, Constraints1' g c)
-type instance Constraints1' (f :.: g) c = (Constraints1' f c, Constraints1' g c)
+type instance Constraints1' (f :.: g) c = (c f, Constraints1' g c)
 type instance Constraints1' Par1 c = ()
 type instance Constraints1' (Rec1 f) c = c f
 type instance Constraints1' (M1 i t f) c = Constraints1' f c
 
-class CtorIndex t => ADT1' (t :: * -> *) where
+class ADT1' (t :: * -> *) where
   generic1' :: (Constraints1' t c, GenericProfunctor p)
     => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 
@@ -126,7 +102,7 @@ instance ADT1' V1 where generic1' _ _ _ = zero
 instance ADT1' U1 where generic1' _ _ _ = unit
 instance (ADT1' f, ADT1' g) => ADT1' (f :+: g) where generic1' for f p = plus (generic1' for f p) (generic1' for f p)
 instance (ADT1' f, ADT1' g) => ADT1' (f :*: g) where generic1' for f p = mult (generic1' for f p) (generic1' for f p)
-instance (ADT1' f, ADT1' g) => ADT1' (f :.: g) where generic1' for f p = dimap unComp1 Comp1 $ generic1' for f $ generic1' for f p
+instance ADT1' g => ADT1' (f :.: g) where generic1' for f p = dimap unComp1 Comp1 $ f (generic1' for f p)
 instance ADT1' Par1 where generic1' _ _ = dimap unPar1 Par1
 instance ADT1' (Rec1 f) where generic1' _ f p = dimap unRec1 Rec1 (f p)
 instance ADT1' f => ADT1' (M1 i t f) where generic1' for f p = dimap unM1 M1 (generic1' for f p)
@@ -134,14 +110,14 @@ instance ADT1' f => ADT1' (M1 i t f) where generic1' for f p = dimap unM1 M1 (ge
 instance ADTNonEmpty1' U1 where nonEmpty1' _ _ _ = unit
 instance (ADTNonEmpty1' f, ADTNonEmpty1' g) => ADTNonEmpty1' (f :+: g) where nonEmpty1' for f p = plus (nonEmpty1' for f p) (nonEmpty1' for f p)
 instance (ADTNonEmpty1' f, ADTNonEmpty1' g) => ADTNonEmpty1' (f :*: g) where nonEmpty1' for f p = mult (nonEmpty1' for f p) (nonEmpty1' for f p)
-instance (ADTNonEmpty1' f, ADTNonEmpty1' g) => ADTNonEmpty1' (f :.: g) where nonEmpty1' for f p = dimap unComp1 Comp1 $ nonEmpty1' for f $ nonEmpty1' for f p
+instance ADTNonEmpty1' g => ADTNonEmpty1' (f :.: g) where nonEmpty1' for f p = dimap unComp1 Comp1 $ f (nonEmpty1' for f p)
 instance ADTNonEmpty1' Par1 where nonEmpty1' _ _ = dimap unPar1 Par1
 instance ADTNonEmpty1' (Rec1 f) where nonEmpty1' _ f p = dimap unRec1 Rec1 (f p)
 instance ADTNonEmpty1' f => ADTNonEmpty1' (M1 i t f) where nonEmpty1' for f p = dimap unM1 M1 (nonEmpty1' for f p)
 
 instance ADTRecord1' U1 where record1' _ _ _ = unit
 instance (ADTRecord1' f, ADTRecord1' g) => ADTRecord1' (f :*: g) where record1' for f p = mult (record1' for f p) (record1' for f p)
-instance (ADTRecord1' f, ADTRecord1' g) => ADTRecord1' (f :.: g) where record1' for f p = dimap unComp1 Comp1 $ record1' for f $ record1' for f p
+instance ADTRecord1' g => ADTRecord1' (f :.: g) where record1' for f p = dimap unComp1 Comp1 $ f (record1' for f p)
 instance ADTRecord1' Par1 where record1' _ _ = dimap unPar1 Par1
 instance ADTRecord1' (Rec1 f) where record1' _ f p = dimap unRec1 Rec1 (f p)
 instance ADTRecord1' f => ADTRecord1' (M1 i t f) where record1' for f p = dimap unM1 M1 (record1' for f p)
@@ -149,6 +125,10 @@ instance ADTRecord1' f => ADTRecord1' (M1 i t f) where record1' for f p = dimap 
 
 absurd :: V1 a -> b
 absurd = \case {}
+
+e1 :: (f a -> b) -> (g a -> b) -> (f :+: g) a -> b
+e1 f _ (L1 l) = f l
+e1 _ f (R1 r) = f r
 
 class Profunctor p => GenericRecordProfunctor p where
   unit :: p (U1 a) (U1 a')
@@ -169,27 +149,21 @@ instance GenericNonEmptyProfunctor (->) where
 instance GenericProfunctor (->) where
   zero = absurd
 
-
 instance GenericRecordProfunctor Tagged where
   unit = Tagged U1
   mult (Tagged l) (Tagged r) = Tagged $ l :*: r
-
 
 instance Applicative f => GenericRecordProfunctor (Star f) where
   unit = Star $ \_ -> pure U1
   mult (Star f) (Star g) = Star $ \(l :*: r) -> (:*:) <$> f l <*> g r
 instance Applicative f => GenericNonEmptyProfunctor (Star f) where
-  plus (Star f) (Star g) = Star $ \case
-    L1 l -> L1 <$> f l
-    R1 r -> R1 <$> g r
+  plus (Star f) (Star g) = Star $ e1 (fmap L1 . f) (fmap R1 . g)
 instance Applicative f => GenericProfunctor (Star f) where
   zero = Star absurd
-
 
 instance Functor f => GenericRecordProfunctor (Costar f) where
   unit = Costar $ const U1
   mult (Costar f) (Costar g) = Costar $ \lr -> f ((\(l :*: _) -> l) <$> lr) :*: g ((\(_ :*: r) -> r) <$> lr)
-
 
 instance Applicative f => GenericRecordProfunctor (Joker f) where
   unit = Joker $ pure U1
@@ -199,17 +173,40 @@ instance Alternative f => GenericNonEmptyProfunctor (Joker f) where
 instance Alternative f => GenericProfunctor (Joker f) where
   zero = Joker empty
 
-
 instance Divisible f => GenericRecordProfunctor (Clown f) where
   unit = Clown conquer
   mult (Clown f) (Clown g) = Clown $ divide (\(l :*: r) -> (l, r)) f g
 instance Decidable f => GenericNonEmptyProfunctor (Clown f) where
-  plus (Clown f) (Clown g) = Clown $ choose h f g where
-    h (L1 l) = Left l
-    h (R1 r) = Right r
+  plus (Clown f) (Clown g) = Clown $ choose (e1 Left Right) f g where
 instance Decidable f => GenericProfunctor (Clown f) where
   zero = Clown $ lose (\v -> v `seq` undefined)
 
+instance (GenericRecordProfunctor p, GenericRecordProfunctor q) => GenericRecordProfunctor (Product p q) where
+  unit = Pair unit unit
+  mult (Pair l1 r1) (Pair l2 r2) = Pair (mult l1 l2) (mult r1 r2)
+instance (GenericNonEmptyProfunctor p, GenericNonEmptyProfunctor q) => GenericNonEmptyProfunctor (Product p q) where
+  plus (Pair l1 r1) (Pair l2 r2) = Pair (plus l1 l2) (plus r1 r2)
+instance (GenericProfunctor p, GenericProfunctor q) => GenericProfunctor (Product p q) where
+  zero = Pair zero zero
+
+instance (Applicative f, GenericRecordProfunctor p) => GenericRecordProfunctor (Tannen f p) where
+  unit = Tannen (pure unit)
+  mult (Tannen l) (Tannen r) = Tannen $ liftA2 mult l r
+instance (Applicative f, GenericNonEmptyProfunctor p) => GenericNonEmptyProfunctor (Tannen f p) where
+  plus (Tannen l) (Tannen r) = Tannen $ liftA2 plus l r
+instance (Applicative f, GenericProfunctor p) => GenericProfunctor (Tannen f p) where
+  zero = Tannen (pure zero)
+
+data Ctor a b = Ctor { index :: a -> Int, count :: Int }
+instance Profunctor Ctor where
+  dimap l _ (Ctor i c) = Ctor (i . l) c
+instance GenericRecordProfunctor Ctor where
+  unit = Ctor (const 0) 1
+  mult _ _ = Ctor (const 0) 1
+instance GenericNonEmptyProfunctor Ctor where
+  plus l r = Ctor (e1 (index l) ((count l + ) . index r)) (count l + count r)
+instance GenericProfunctor Ctor where
+  zero = Ctor (const 0) 0
 
 record :: (ADTRecord t, Constraints t c, GenericRecordProfunctor p)
        => for c -> (forall s. c s => p s s) -> p t t
@@ -244,20 +241,20 @@ type Constraints t c = Constraints' (Rep t) c
 type Constraints1 t c = Constraints1' (Rep1 t) c
 
 -- | `ADTRecord` is a constraint type synonym. An instance is an `ADT` with *exactly* one constructor.
-type ADTRecord t = (Generic t, ADTRecord' (Rep t))
+type ADTRecord t = (Generic t, ADTRecord' (Rep t), Constraints t AnyType)
 
-type ADTRecord1 t = (Generic1 t, ADTRecord1' (Rep1 t))
+type ADTRecord1 t = (Generic1 t, ADTRecord1' (Rep1 t), Constraints1 t AnyType)
 
 -- | `ADTNonEmpty` is a constraint type synonym. An instance is an `ADT` with *at least* one constructor.
-type ADTNonEmpty t = (Generic t, ADTNonEmpty' (Rep t))
+type ADTNonEmpty t = (Generic t, ADTNonEmpty' (Rep t), Constraints t AnyType)
 
-type ADTNonEmpty1 t = (Generic1 t, ADTNonEmpty1' (Rep1 t))
+type ADTNonEmpty1 t = (Generic1 t, ADTNonEmpty1' (Rep1 t), Constraints1 t AnyType)
 
 -- | `ADT` is a constraint type synonym. The `Generic` instance can be derived,
 -- and any generic representation will be an instance of `ADT'`.
-type ADT t = (Generic t, ADT' (Rep t))
+type ADT t = (Generic t, ADT' (Rep t), Constraints t AnyType)
 
-type ADT1 t = (Generic1 t, ADT1' (Rep1 t))
+type ADT1 t = (Generic1 t, ADT1' (Rep1 t), Constraints1 t AnyType)
 
 -- | Tell the compiler which class we want to use in the traversal. Should be used like this:
 --
@@ -275,7 +272,12 @@ data For (c :: k -> Constraint) = For
 -- `put` t = `putWord8` (`toEnum` (`ctorIndex` t)) `<>` `gfoldMap` (`For` :: `For` `Binary`) `put` t
 -- @
 ctorIndex :: ADT t => t -> Int
-ctorIndex = ctorIndex' . from
+ctorIndex = index $ generic (For :: For AnyType) (Ctor (const 0) 1)
 
 ctorIndex1 :: ADT1 t => t a -> Int
-ctorIndex1 = ctorIndex' . from1
+ctorIndex1 = index $ generic1 (For :: For AnyType) (const $ Ctor (const 0) 1) (Ctor (const 0) 1)
+
+-- | Any type is instance of `AnyType`, you can use it with @For :: For AnyType@
+-- if you don't actually need a class constraint.
+class AnyType a
+instance AnyType a

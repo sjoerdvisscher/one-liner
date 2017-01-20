@@ -1,4 +1,11 @@
-{-# LANGUAGE DeriveGeneric, DefaultSignatures, ConstraintKinds, TypeOperators, FlexibleContexts #-}
+{-# LANGUAGE
+  TypeOperators,
+  DeriveGeneric,
+  DeriveAnyClass,
+  ConstraintKinds,
+  FlexibleContexts,
+  DefaultSignatures 
+  #-}
 
 import GHC.Generics
 import Generics.OneLiner
@@ -29,10 +36,8 @@ instance EnumAll a => EnumAll (Maybe a)
 
 
 infixr 5 :^:
-data Tree a = Leaf { value :: a } | Tree a :^: Tree a deriving (Show, Generic)
-
-instance Size a => Size (Tree a)
-instance EnumAll a => EnumAll (Tree a)
+data Tree a = Leaf { value :: a } | Tree a :^: Tree a
+  deriving (Show, Generic, Size, EnumAll)
 
 trees :: [Tree (Maybe Bool)]
 trees = enumAll

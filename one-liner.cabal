@@ -2,13 +2,6 @@ Name:                 one-liner
 Version:              0.7
 Synopsis:             Constraint-based generics
 Description:          Write short and concise generic instances of type classes.
-                      .
-                      There are two separate parts: @Generics.OneLiner@ is for
-                      writing generic functions using @GHC.Generics@.
-                      The other modules show how to implement these same generic
-                      functions with a traversal-style generics type class,
-                      without the use of an intermediate generic representation
-                      type.
 Homepage:             https://github.com/sjoerdvisscher/one-liner
 Bug-reports:          https://github.com/sjoerdvisscher/one-liner/issues
 License:              BSD3

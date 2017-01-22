@@ -7,12 +7,9 @@
 -- Stability   :  experimental
 -- Portability :  non-portable
 --
--- This module is for writing generic functions on algebraic data types of
--- kind @*@ and @* -> *@. These data types must be an instance of either the
--- `Generic` or `Generic1` type classes, which can be derived.
--- It is particularly useful for writing default implementations of
--- type class methods.
---
+-- All functions without postfix are for instances of `Generic`, and functions
+-- with postfix `1` are for instances of `Generic1` (with kind @* -> *@) which
+-- get an extra argument to specify how to deal with the parameter.
 -----------------------------------------------------------------------------
 {-# LANGUAGE
     RankNTypes
@@ -33,20 +30,24 @@ module Generics.OneLiner (
   mzipWith1, zipWithA1,
   -- * Consuming values
   consume, consume1,
-  -- * Single constructor functions
-  nullaryOp, unaryOp, binaryOp, algebra, gcotraverse1,
+  -- * Functions for records
+  -- | These functions only work for single constructor data types.
+  nullaryOp, unaryOp, binaryOp, algebra, dialgebra, gcotraverse1,
   -- * Generic programming with profunctors
+  -- | All the above functions have been implemented using these functions,
+  -- using different `profunctor`s.
   GenericRecordProfunctor(..), record, record1,
   GenericNonEmptyProfunctor(..), nonEmpty, nonEmpty1,
   GenericProfunctor(..), generic, generic1,
   -- * Types
-  ADT, ADTRecord, ADTNonEmpty, Constraints,
-  ADT1, ADTRecord1, ADTNonEmpty1, Constraints1,
+  ADT, ADTNonEmpty, ADTRecord, Constraints,
+  ADT1, ADTNonEmpty1, ADTRecord1, Constraints1,
   For(..), AnyType
 ) where
 
 import GHC.Generics
 import Control.Applicative
+import Data.Bifunctor.Biff
 import Data.Bifunctor.Clown
 import Data.Bifunctor.Joker
 import Data.Functor.Compose
@@ -62,6 +63,8 @@ import Generics.OneLiner.Internal
 -- `minBound` = `head` `$` `create` (`For` :: `For` `Bounded`) [`minBound`]
 -- `maxBound` = `last` `$` `create` (`For` :: `For` `Bounded`) [`maxBound`]
 -- @
+--
+-- `create` is `createA` specialized to lists.
 create :: (ADT t, Constraints t c)
        => for c -> (forall s. c s => [s]) -> [t]
 create = createA
@@ -73,29 +76,38 @@ create = createA
 -- @
 -- get = getWord8 `>>=` \\ix -> `createA` (`For` :: `For` Binary) [get] `!!` `fromEnum` ix
 -- @
+--
+-- `createA` is `generic` specialized to `Joker`.
 createA :: (ADT t, Constraints t c, Alternative f)
         => for c -> (forall s. c s => f s) -> f t
 createA for f = runJoker $ generic for $ Joker f
 
 -- | Generate ways to consume values of type `t`. This is the contravariant version of `createA`.
+--
+-- `consume` is `generic` specialized to `Clown`.
 consume :: (ADT t, Constraints t c, Decidable f)
         => for c -> (forall s. c s => f s) -> f t
 consume for f = runClown $ generic for $ Clown f
 
+-- | `create1` is `createA1` specialized to lists.
 create1 :: (ADT1 t, Constraints1 t c)
         => for c -> (forall b s. c s => [b] -> [s b]) -> [a] -> [t a]
 create1 = createA1
 
+-- | `createA1` is `generic1` specialized to `Joker`.
 createA1 :: (ADT1 t, Constraints1 t c, Alternative f)
          => for c -> (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
 createA1 for f p = runJoker $ generic1 for (Joker . f . runJoker) (Joker p)
 
+-- | `consume1` is `generic1` specialized to `Clown`.
 consume1 :: (ADT1 t, Constraints1 t c, Decidable f)
          => for c -> (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
 consume1 for f p = runClown $ generic1 for (Clown . f . runClown) (Clown p)
 
 
 -- | Map over a structure, updating each component.
+--
+-- `gmap` is `generic` specialized to @(->)@.
 gmap :: (ADT t, Constraints t c)
      => for c -> (forall s. c s => s -> s) -> t -> t
 gmap = generic
@@ -107,11 +119,15 @@ gmap = generic
 -- @
 -- size = `succ` `.` `getSum` `.` `gfoldMap` (`For` :: `For` Size) (`Sum` `.` size)
 -- @
+--
+-- `gfoldMap` is `gtraverse` specialized to `Const`.
 gfoldMap :: (ADT t, Constraints t c, Monoid m)
          => for c -> (forall s. c s => s -> m) -> t -> m
 gfoldMap for f = getConst . gtraverse for (Const . f)
 
 -- | Map each component of a structure to an action, evaluate these actions from left to right, and collect the results.
+--
+-- `gtraverse` is `generic` specialized to `Star`.
 gtraverse :: (ADT t, Constraints t c, Applicative f)
           => for c -> (forall s. c s => s -> f s) -> t -> f t
 gtraverse for f = runStar $ generic for $ Star f
@@ -120,6 +136,8 @@ gtraverse for f = runStar $ generic for $ Star f
 -- @
 -- fmap = `gmap1` (`For` :: `For` `Functor`) `fmap`
 -- @
+--
+-- `gmap1` is `generic1` specialized to @(->)@.
 gmap1 :: (ADT1 t, Constraints1 t c)
      => for c -> (forall d e s. c s => (d -> e) -> s d -> s e) -> (a -> b) -> t a -> t b
 gmap1 = generic1
@@ -128,6 +146,8 @@ gmap1 = generic1
 -- @
 -- foldMap = `gfoldMap1` (`For` :: `For` `Foldable`) `foldMap`
 -- @
+--
+-- `gfoldMap1` is `gtraverse1` specialized to `Const`.
 gfoldMap1 :: (ADT1 t, Constraints1 t c, Monoid m)
           => for c -> (forall s b. c s => (b -> m) -> s b -> m) -> (a -> m) -> t a -> m
 gfoldMap1 for f g = getConst . gtraverse1 for ((Const .) . f . (getConst .)) (Const . g)
@@ -136,6 +156,8 @@ gfoldMap1 for f g = getConst . gtraverse1 for ((Const .) . f . (getConst .)) (Co
 -- @
 -- traverse = `gtraverse1` (`For` :: `For` `Traversable`) `traverse`
 -- @
+--
+-- `gtraverse1` is `generic1` specialized to `Star`.
 gtraverse1 :: (ADT1 t, Constraints1 t c, Applicative f)
            => for c -> (forall d e s. c s => (d -> f e) -> s d -> f (s e)) -> (a -> f b) -> t a -> f (t b)
 gtraverse1 for f g = runStar $ generic1 for (Star . f . runStar) (Star g)
@@ -146,6 +168,8 @@ gtraverse1 for f g = runStar $ generic1 for (Star . f . runStar) (Star g)
 -- @
 -- `compare` s t = `compare` (`ctorIndex` s) (`ctorIndex` t) `<>` `mzipWith` (`For` :: `For` `Ord`) `compare` s t
 -- @
+--
+-- `mzipWith` is `zipWithA` specialized to @`Compose` `Maybe` (`Const` m)@
 mzipWith :: (ADT t, Constraints t c, Monoid m)
          => for c -> (forall s. c s => s -> s -> m) -> t -> t -> m
 mzipWith for f = outm2 $ zipWithA for (inm2 f)
@@ -156,6 +180,12 @@ zipWithA :: (ADT t, Constraints t c, Alternative f)
          => for c -> (forall s. c s => s -> s -> f s) -> t -> t -> f t
 zipWithA for f = runZip $ generic for $ Zip f
 
+-- |
+-- @
+-- liftCompare = mzipWith (For :: For Ord1) liftCompare
+-- @
+--
+-- `mzipWith1` is `zipWithA1` specialized to @`Compose` `Maybe` (`Const` m)@
 mzipWith1 :: (ADT1 t, Constraints1 t c, Monoid m)
           => for c -> (forall s b. c s => (b -> b -> m) -> s b -> s b -> m)
           -> (a -> a -> m) -> t a -> t a -> m
@@ -192,12 +222,14 @@ outm2 f x y = maybe mempty getConst $ getCompose (f x y)
 -- `mempty` = `nullaryOp` (`For` :: `For` `Monoid`) `mempty`
 -- `fromInteger` i = `nullaryOp` (`For` :: `For` `Num`) (`fromInteger` i)
 -- @
+--
+-- `nullaryOp` is `record` specialized to `Tagged`.
 nullaryOp :: (ADTRecord t, Constraints t c)
           => for c -> (forall s. c s => s) -> t
 nullaryOp for f = unTagged $ record for $ Tagged f
 
 -- | Implement a unary operator by calling the operator on the components.
--- This is here for consistency, it is the same as `gmap`.
+-- This is here for consistency, it is the same as `record`.
 --
 -- @
 -- `negate` = `unaryOp` (`For` :: `For` `Num`) `negate`
@@ -212,6 +244,8 @@ unaryOp = record
 -- `mappend` = `binaryOp` (`For` :: `For` `Monoid`) `mappend`
 -- (`+`) = `binaryOp` (`For` :: `For` `Num`) (`+`)
 -- @
+--
+-- `binaryOp` is `algebra` specialized to pairs.
 binaryOp :: (ADTRecord t, Constraints t c)
          => for c -> (forall s. c s => s -> s -> s) -> t -> t -> t
 binaryOp for f l r = algebra for (\(Pair a b) -> f a b) (Pair l r)
@@ -225,15 +259,24 @@ instance Functor Pair where
 -- @
 -- `binaryOp` for f l r = `algebra` for (\\(Pair a b) -> f a b) (Pair l r)
 -- @
+--
+-- `algebra` is `record` specialized to `Costar`.
 algebra :: (ADTRecord t, Constraints t c, Functor f)
         => for c -> (forall s. c s => f s -> s) -> f t -> t
 algebra for f = runCostar $ record for $ Costar f
+
+-- | `dialgebra` is `record` specialized to @`Biff` (->)@.
+dialgebra :: (ADTRecord t, Constraints t c, Functor f, Applicative g)
+        => for c -> (forall s. c s => f s -> g s) -> f t -> g t
+dialgebra for f = runBiff $ record for $ Biff f
 
 -- |
 --
 -- @
 -- cotraverse = `gcotraverse1` (`For` :: `For` `Distributive`) `cotraverse`
 -- @
+--
+-- `gcotraverse1` is `record1` specialized to `Costar`.
 gcotraverse1 :: (ADTRecord1 t, Constraints1 t c, Functor f)
              => for c -> (forall d e s. c s => (f d -> e) -> f (s d) -> s e) -> (f a -> b) -> f (t a) -> t b
 gcotraverse1 for f p = runCostar $ record1 for (Costar . f . runCostar) (Costar p)

@@ -28,6 +28,7 @@ module Generics.OneLiner.Internal where
 import GHC.Generics
 import GHC.Types (Constraint)
 import Control.Applicative
+import Data.Bifunctor.Biff
 import Data.Bifunctor.Clown
 import Data.Bifunctor.Joker
 import Data.Bifunctor.Product
@@ -49,11 +50,11 @@ class ADT' (t :: * -> *) where
   generic' :: (Constraints' t c, GenericProfunctor p)
     => for c -> (forall s. c s => p s s) -> p (t x) (t x)
 
-class ADT' t => ADTNonEmpty' (t :: * -> *) where
+class ADTNonEmpty' (t :: * -> *) where
   nonEmpty' :: (Constraints' t c, GenericNonEmptyProfunctor p)
     => for c -> (forall s. c s => p s s) -> p (t x) (t x)
 
-class ADTNonEmpty' t => ADTRecord' (t :: * -> *) where
+class ADTRecord' (t :: * -> *) where
   record' :: (Constraints' t c, GenericRecordProfunctor p)
     => for c -> (forall s. c s => p s s) -> p (t x) (t x)
 
@@ -90,11 +91,11 @@ class ADT1' (t :: * -> *) where
   generic1' :: (Constraints1' t c, GenericProfunctor p)
     => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 
-class ADT1' t => ADTNonEmpty1' (t :: * -> *) where
+class ADTNonEmpty1' (t :: * -> *) where
   nonEmpty1' :: (Constraints1' t c, GenericNonEmptyProfunctor p)
     => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 
-class ADTNonEmpty1' t => ADTRecord1' (t :: * -> *) where
+class ADTRecord1' (t :: * -> *) where
   record1' :: (Constraints1' t c, GenericRecordProfunctor p)
     => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 
@@ -130,13 +131,28 @@ e1 :: (f a -> b) -> (g a -> b) -> (f :+: g) a -> b
 e1 f _ (L1 l) = f l
 e1 _ f (R1 r) = f r
 
+fst1 :: (f :*: g) a -> f a
+fst1 (l :*: _) = l
+snd1 :: (f :*: g) a -> g a
+snd1 (_ :*: r) = r
+
+-- | A generic function using a `GenericRecordProfunctor` works on any data type
+-- with exactly one constructor, a.k.a. records,
+-- with multiple fields (`mult`) or no fields (`unit`).
+--
+-- `GenericRecordProfunctor` is similar to `ProductProfuctor` from the
+-- product-profunctor package, but using types from GHC.Generics.
 class Profunctor p => GenericRecordProfunctor p where
   unit :: p (U1 a) (U1 a')
   mult :: p (f a) (f' a') -> p (g a) (g' a') -> p ((f :*: g) a) ((f' :*: g') a')
 
+-- | A generic function using a `GenericNonEmptyProfunctor` works on any data
+-- type with at least one constructor.
 class GenericRecordProfunctor p => GenericNonEmptyProfunctor p where
   plus :: p (f a) (f' a') -> p (g a) (g' a') -> p ((f :+: g) a) ((f' :+: g') a')
 
+-- | A generic function using a `GenericProfunctor` works on any
+-- algebraic data type, including those with no constructors.
 class GenericNonEmptyProfunctor p => GenericProfunctor p where
   zero :: p (V1 a) (V1 a')
 
@@ -144,8 +160,7 @@ instance GenericRecordProfunctor (->) where
   unit _ = U1
   mult f g (l :*: r) = f l :*: g r
 instance GenericNonEmptyProfunctor (->) where
-  plus f _ (L1 l) = L1 (f l)
-  plus _ g (R1 l) = R1 (g l)
+  plus f g = e1 (L1 . f) (R1 . g)
 instance GenericProfunctor (->) where
   zero = absurd
 
@@ -163,7 +178,11 @@ instance Applicative f => GenericProfunctor (Star f) where
 
 instance Functor f => GenericRecordProfunctor (Costar f) where
   unit = Costar $ const U1
-  mult (Costar f) (Costar g) = Costar $ \lr -> f ((\(l :*: _) -> l) <$> lr) :*: g ((\(_ :*: r) -> r) <$> lr)
+  mult (Costar f) (Costar g) = Costar $ \lr -> f (fst1 <$> lr) :*: g (snd1 <$> lr)
+
+instance (Functor f, Applicative g) => GenericRecordProfunctor (Biff (->) f g) where
+  unit = Biff $ const $ pure U1
+  mult (Biff f) (Biff g) = Biff $ \lr -> (:*:) <$> f (fst1 <$> lr) <*> g (snd1 <$> lr)
 
 instance Applicative f => GenericRecordProfunctor (Joker f) where
   unit = Joker $ pure U1
@@ -224,8 +243,6 @@ nonEmpty1 :: (ADTNonEmpty1 t, Constraints1 t c, GenericNonEmptyProfunctor p)
           => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 nonEmpty1 for f p = dimap from1 to1 $ nonEmpty1' for f p
 
--- | All the above functions have been implemented using this single function,
--- using different `profunctor`s.
 generic :: (ADT t, Constraints t c, GenericProfunctor p)
         => for c -> (forall s. c s => p s s) -> p t t
 generic for f = dimap from to $ generic' for f
@@ -234,7 +251,8 @@ generic1 :: (ADT1 t, Constraints1 t c, GenericProfunctor p)
          => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 generic1 for f p = dimap from1 to1 $ generic1' for f p
 
--- | `Constraints` is a constraint type synonym, containing the constraint requirements for an instance for `t` of class `c`.
+-- | `Constraints` is a constraint type synonym, containing the constraint
+-- requirements for an instance for `t` of class `c`.
 -- It requires an instance of class `c` for each component of `t`.
 type Constraints t c = Constraints' (Rep t) c
 
@@ -251,7 +269,7 @@ type ADTNonEmpty t = (Generic t, ADTNonEmpty' (Rep t), Constraints t AnyType)
 type ADTNonEmpty1 t = (Generic1 t, ADTNonEmpty1' (Rep1 t), Constraints1 t AnyType)
 
 -- | `ADT` is a constraint type synonym. The `Generic` instance can be derived,
--- and any generic representation will be an instance of `ADT'`.
+-- and any generic representation will be an instance of `ADT'` and `AnyType`.
 type ADT t = (Generic t, ADT' (Rep t), Constraints t AnyType)
 
 type ADT1 t = (Generic1 t, ADT1' (Rep1 t), Constraints1 t AnyType)

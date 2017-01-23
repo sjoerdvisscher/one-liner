@@ -97,12 +97,12 @@ create1 = createA1
 -- | `createA1` is `generic1` specialized to `Joker`.
 createA1 :: (ADT1 t, Constraints1 t c, Alternative f)
          => for c -> (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
-createA1 for f p = runJoker $ generic1 for (Joker . f . runJoker) (Joker p)
+createA1 for f = dimap Joker runJoker $ generic1 for $ dimap runJoker Joker f
 
 -- | `consume1` is `generic1` specialized to `Clown`.
 consume1 :: (ADT1 t, Constraints1 t c, Decidable f)
          => for c -> (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
-consume1 for f p = runClown $ generic1 for (Clown . f . runClown) (Clown p)
+consume1 for f = dimap Clown runClown $ generic1 for $ dimap runClown Clown f
 
 
 -- | Map over a structure, updating each component.
@@ -150,7 +150,7 @@ gmap1 = generic1
 -- `gfoldMap1` is `gtraverse1` specialized to `Const`.
 gfoldMap1 :: (ADT1 t, Constraints1 t c, Monoid m)
           => for c -> (forall s b. c s => (b -> m) -> s b -> m) -> (a -> m) -> t a -> m
-gfoldMap1 for f g = getConst . gtraverse1 for ((Const .) . f . (getConst .)) (Const . g)
+gfoldMap1 for f = dimap (Const .) (getConst .) $ gtraverse1 for $ dimap (getConst .) (Const .) f
 
 -- |
 -- @
@@ -160,7 +160,7 @@ gfoldMap1 for f g = getConst . gtraverse1 for ((Const .) . f . (getConst .)) (Co
 -- `gtraverse1` is `generic1` specialized to `Star`.
 gtraverse1 :: (ADT1 t, Constraints1 t c, Applicative f)
            => for c -> (forall d e s. c s => (d -> f e) -> s d -> f (s e)) -> (a -> f b) -> t a -> f (t b)
-gtraverse1 for f g = runStar $ generic1 for (Star . f . runStar) (Star g)
+gtraverse1 for f = dimap Star runStar $ generic1 for $ dimap runStar Star f
 
 -- | Combine two values by combining each component of the structures to a monoid, and combine the results.
 -- Returns `mempty` if the constructors don't match.
@@ -172,7 +172,7 @@ gtraverse1 for f g = runStar $ generic1 for (Star . f . runStar) (Star g)
 -- `mzipWith` is `zipWithA` specialized to @`Compose` `Maybe` (`Const` m)@
 mzipWith :: (ADT t, Constraints t c, Monoid m)
          => for c -> (forall s. c s => s -> s -> m) -> t -> t -> m
-mzipWith for f = outm2 $ zipWithA for (inm2 f)
+mzipWith for f = outm2 $ zipWithA for $ inm2 f
 
 -- | Combine two values by combining each component of the structures with the given function, under an applicative effect.
 -- Returns `empty` if the constructors don't match.
@@ -182,19 +182,19 @@ zipWithA for f = runZip $ generic for $ Zip f
 
 -- |
 -- @
--- liftCompare = mzipWith (For :: For Ord1) liftCompare
+-- liftCompare = mzipWith1 (For :: For Ord1) liftCompare
 -- @
 --
 -- `mzipWith1` is `zipWithA1` specialized to @`Compose` `Maybe` (`Const` m)@
 mzipWith1 :: (ADT1 t, Constraints1 t c, Monoid m)
           => for c -> (forall s b. c s => (b -> b -> m) -> s b -> s b -> m)
           -> (a -> a -> m) -> t a -> t a -> m
-mzipWith1 for f p = outm2 $ zipWithA1 for (inm2 . f . outm2) (inm2 p)
+mzipWith1 for f = dimap inm2 outm2 $ zipWithA1 for $ dimap outm2 inm2 f
 
 zipWithA1 :: (ADT1 t, Constraints1 t c, Alternative f)
           => for c -> (forall d e s. c s => (d -> d -> f e) -> s d -> s d -> f (s e))
           -> (a -> a -> f b) -> t a -> t a -> f (t b)
-zipWithA1 for f p = runZip $ generic1 for (Zip . f . runZip) (Zip p)
+zipWithA1 for f = dimap Zip runZip $ generic1 for $ dimap runZip Zip f
 
 
 newtype Zip f a b = Zip { runZip :: a -> a -> f b }
@@ -212,9 +212,9 @@ instance Alternative f => GenericProfunctor (Zip f) where
   zero = Zip absurd
 
 inm2 :: (t -> t -> m) -> t -> t -> Compose Maybe (Const m) a
-inm2 f x y = Compose $ Just $ Const $ f x y
+inm2 f = Compose .: Just .: Const .: f
 outm2 :: Monoid m => (t -> t -> Compose Maybe (Const m) a) -> t -> t -> m
-outm2 f x y = maybe mempty getConst $ getCompose (f x y)
+outm2 f = maybe mempty getConst .: getCompose .: f
 
 -- | Implement a nullary operator by calling the operator for each component.
 --
@@ -248,7 +248,7 @@ unaryOp = record
 -- `binaryOp` is `algebra` specialized to pairs.
 binaryOp :: (ADTRecord t, Constraints t c)
          => for c -> (forall s. c s => s -> s -> s) -> t -> t -> t
-binaryOp for f l r = algebra for (\(Pair a b) -> f a b) (Pair l r)
+binaryOp for f = algebra for (\(Pair a b) -> f a b) .: Pair
 
 data Pair a = Pair a a
 instance Functor Pair where
@@ -280,3 +280,7 @@ dialgebra for f = runBiff $ record for $ Biff f
 gcotraverse1 :: (ADTRecord1 t, Constraints1 t c, Functor f)
              => for c -> (forall d e s. c s => (f d -> e) -> f (s d) -> s e) -> (f a -> b) -> f (t a) -> t b
 gcotraverse1 for f p = runCostar $ record1 for (Costar . f . runCostar) (Costar p)
+
+infixr 9 .:
+(.:) :: (c -> d) -> (a -> b -> c) -> (a -> b -> d)
+(.:) = (.) . (.)

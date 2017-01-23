@@ -11,6 +11,7 @@ import Test.SmallCheck.Series
 import Control.Monad.Logic.Class
 import Control.Monad
 import Data.Hashable
+import Data.Functor.Classes
 import Data.Functor.Compose
 import Data.Functor.Contravariant
 import Data.Functor.Contravariant.Divisible
@@ -82,6 +83,16 @@ instance Decidable CoArb where
 gcoarbitrary :: (ADT t, Constraints t CoArbitrary) => t -> Gen b -> Gen b
 gcoarbitrary = unCoArb $ consume (For :: For CoArbitrary) (CoArb coarbitrary)
 
+
+liftCompareDefault :: (ADT1 f, Constraints1 f Ord1) => (a -> a -> Ordering) -> f a -> f a -> Ordering
+liftCompareDefault = mzipWith1 (For :: For Ord1) liftCompare
+
+infixr 9 .:
+(.:) :: (c -> d) -> (a -> b -> c) -> (a -> b -> d)
+(.:) = (.) . (.)
+
+liftEqDefault :: (ADT1 f, Constraints1 f Eq1) => (a -> a -> Bool) -> f a -> f a -> Bool
+liftEqDefault = (getAll .:) . mzipWith1 (For :: For Eq1) ((All .:) . liftEq . (getAll .:)) . (All .:)
 
 -- -- http://hackage.haskell.org/package/lens-4.3.3/docs/Generics-Deriving-Lens.html
 -- whenCastableOrElse :: forall a b f. (Typeable a, Typeable b) => (b -> f b) -> (a -> f a) -> a -> f a

@@ -2,6 +2,7 @@
 {-# LANGUAGE
   DataKinds,
   TypeFamilies,
+  TypeOperators,
   FlexibleContexts,
   FlexibleInstances,
   ScopedTypeVariables,
@@ -11,35 +12,33 @@
 
 import Generics.OneLiner
 import Data.Proxy
+import Data.Type.Equality
+
 import Data.Functor.Identity
 
-class Tinplate' (p :: Bool) a b where
+
+class TinplateHelper (p :: Bool) a b where
   trav' :: Applicative f => proxy p -> (a -> f a) -> b -> f b
 
-instance Tinplate' 'True a a where trav' _ f = f
+instance TinplateHelper 'True a a where trav' _ f = f
 
-instance Tinplate' 'False a Char where trav' _ _ = pure
-instance Tinplate' 'False a Double where trav' _ _ = pure
-instance Tinplate' 'False a Float where trav' _ _ = pure
-instance Tinplate' 'False a Int where trav' _ _ = pure
-instance Tinplate' 'False a Word where trav' _ _ = pure
-
-instance {-# OVERLAPPABLE #-} (ADT b, Constraints b (Tinplate a)) => Tinplate' 'False a b where
+instance {-# OVERLAPPABLE #-} (ADT b, Constraints b (TinplateAlias a)) => TinplateHelper 'False a b where
   trav' _ = tinplate
 
-type family Equals a b :: Bool where
-  Equals a a = 'True
-  Equals a b = 'False
+instance TinplateHelper 'False a Char where trav' _ _ = pure
+instance TinplateHelper 'False a Double where trav' _ _ = pure
+instance TinplateHelper 'False a Float where trav' _ _ = pure
+instance TinplateHelper 'False a Int where trav' _ _ = pure
+instance TinplateHelper 'False a Word where trav' _ _ = pure
 
-class Tinplate a b where
+class TinplateAlias a b where
   trav :: Applicative f => (a -> f a) -> b -> f b
+instance TinplateHelper (a == b) a b => TinplateAlias a b where
+  trav = trav' (Proxy :: Proxy (a == b))
 
-instance Tinplate' (Equals a b) a b => Tinplate a b where
-  trav = trav' (Proxy :: Proxy (Equals a b))
 
-
-tinplate :: forall a b f. (ADT b, Constraints b (Tinplate a), Applicative f) => (a -> f a) -> b -> f b
-tinplate f = gtraverse (For :: For (Tinplate a)) (trav f)
+tinplate :: forall a b f. (ADT b, Constraints b (TinplateAlias a), Applicative f) => (a -> f a) -> b -> f b
+tinplate f = gtraverse (For :: For (TinplateAlias a)) (trav f)
 
 
 

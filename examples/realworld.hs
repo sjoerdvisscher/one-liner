@@ -93,12 +93,3 @@ infixr 9 .:
 
 liftEqDefault :: (ADT1 f, Constraints1 f Eq1) => (a -> a -> Bool) -> f a -> f a -> Bool
 liftEqDefault = (getAll .:) . mzipWith1 (For :: For Eq1) ((All .:) . liftEq . (getAll .:)) . (All .:)
-
--- -- http://hackage.haskell.org/package/lens-4.3.3/docs/Generics-Deriving-Lens.html
--- whenCastableOrElse :: forall a b f. (Typeable a, Typeable b) => (b -> f b) -> (a -> f a) -> a -> f a
--- whenCastableOrElse f g = maybe g (\Refl -> f) (eqT :: Maybe (a :~: b))
---
--- tinplate :: forall t b. (Typeable b, Deep Typeable t) => Traversal' t b
--- tinplate f
---   | isAtom (Proxy :: Proxy t) = f `whenCastableOrElse` pure
---   | otherwise = gtraverse (For :: For (Deep Typeable)) $ f `whenCastableOrElse` tinplate f

@@ -210,6 +210,7 @@ instance Alternative f => GenericNonEmptyProfunctor (Zip f) where
     h _ _ = empty
 instance Alternative f => GenericProfunctor (Zip f) where
   zero = Zip absurd
+  identity = Zip $ \_ _ -> empty
 
 inm2 :: (t -> t -> m) -> t -> t -> Compose Maybe (Const m) a
 inm2 f = Compose .: Just .: Const .: f

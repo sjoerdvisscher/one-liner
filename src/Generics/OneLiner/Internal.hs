@@ -85,6 +85,7 @@ type instance Constraints1' (f :*: g) c = (Constraints1' f c, Constraints1' g c)
 type instance Constraints1' (f :.: g) c = (c f, Constraints1' g c)
 type instance Constraints1' Par1 c = ()
 type instance Constraints1' (Rec1 f) c = c f
+type instance Constraints1' (K1 i v) c = ()
 type instance Constraints1' (M1 i t f) c = Constraints1' f c
 
 class ADT1' (t :: * -> *) where
@@ -106,6 +107,7 @@ instance (ADT1' f, ADT1' g) => ADT1' (f :*: g) where generic1' for f p = mult (g
 instance ADT1' g => ADT1' (f :.: g) where generic1' for f p = dimap unComp1 Comp1 $ f (generic1' for f p)
 instance ADT1' Par1 where generic1' _ _ = dimap unPar1 Par1
 instance ADT1' (Rec1 f) where generic1' _ f p = dimap unRec1 Rec1 (f p)
+instance ADT1' (K1 i v) where generic1' _ _ _ = dimap unK1 K1 identity
 instance ADT1' f => ADT1' (M1 i t f) where generic1' for f p = dimap unM1 M1 (generic1' for f p)
 
 instance ADTNonEmpty1' U1 where nonEmpty1' _ _ _ = unit
@@ -152,9 +154,11 @@ class GenericRecordProfunctor p => GenericNonEmptyProfunctor p where
   plus :: p (f a) (f' a') -> p (g a) (g' a') -> p ((f :+: g) a) ((f' :+: g') a')
 
 -- | A generic function using a `GenericProfunctor` works on any
--- algebraic data type, including those with no constructors.
+-- algebraic data type, including those with no constructors and constants.
 class GenericNonEmptyProfunctor p => GenericProfunctor p where
+  identity :: p a a
   zero :: p (V1 a) (V1 a')
+  zero = lmap absurd identity
 
 instance GenericRecordProfunctor (->) where
   unit _ = U1
@@ -163,6 +167,7 @@ instance GenericNonEmptyProfunctor (->) where
   plus f g = e1 (L1 . f) (R1 . g)
 instance GenericProfunctor (->) where
   zero = absurd
+  identity = id
 
 instance GenericRecordProfunctor Tagged where
   unit = Tagged U1
@@ -175,6 +180,7 @@ instance Applicative f => GenericNonEmptyProfunctor (Star f) where
   plus (Star f) (Star g) = Star $ e1 (fmap L1 . f) (fmap R1 . g)
 instance Applicative f => GenericProfunctor (Star f) where
   zero = Star absurd
+  identity = Star pure
 
 instance Functor f => GenericRecordProfunctor (Costar f) where
   unit = Costar $ const U1
@@ -191,6 +197,7 @@ instance Alternative f => GenericNonEmptyProfunctor (Joker f) where
   plus (Joker l) (Joker r) = Joker $ L1 <$> l <|> R1 <$> r
 instance Alternative f => GenericProfunctor (Joker f) where
   zero = Joker empty
+  identity = Joker empty
 
 instance Divisible f => GenericRecordProfunctor (Clown f) where
   unit = Clown conquer
@@ -198,7 +205,8 @@ instance Divisible f => GenericRecordProfunctor (Clown f) where
 instance Decidable f => GenericNonEmptyProfunctor (Clown f) where
   plus (Clown f) (Clown g) = Clown $ choose (e1 Left Right) f g where
 instance Decidable f => GenericProfunctor (Clown f) where
-  zero = Clown $ lose (\v -> v `seq` undefined)
+  zero = Clown $ lose absurd
+  identity = Clown conquer
 
 instance (GenericRecordProfunctor p, GenericRecordProfunctor q) => GenericRecordProfunctor (Product p q) where
   unit = Pair unit unit
@@ -207,6 +215,7 @@ instance (GenericNonEmptyProfunctor p, GenericNonEmptyProfunctor q) => GenericNo
   plus (Pair l1 r1) (Pair l2 r2) = Pair (plus l1 l2) (plus r1 r2)
 instance (GenericProfunctor p, GenericProfunctor q) => GenericProfunctor (Product p q) where
   zero = Pair zero zero
+  identity = Pair identity identity
 
 instance (Applicative f, GenericRecordProfunctor p) => GenericRecordProfunctor (Tannen f p) where
   unit = Tannen (pure unit)
@@ -215,6 +224,7 @@ instance (Applicative f, GenericNonEmptyProfunctor p) => GenericNonEmptyProfunct
   plus (Tannen l) (Tannen r) = Tannen $ liftA2 plus l r
 instance (Applicative f, GenericProfunctor p) => GenericProfunctor (Tannen f p) where
   zero = Tannen (pure zero)
+  identity = Tannen (pure identity)
 
 data Ctor a b = Ctor { index :: a -> Int, count :: Int }
 instance Profunctor Ctor where
@@ -226,6 +236,7 @@ instance GenericNonEmptyProfunctor Ctor where
   plus l r = Ctor (e1 (index l) ((count l + ) . index r)) (count l + count r)
 instance GenericProfunctor Ctor where
   zero = Ctor (const 0) 0
+  identity = Ctor (const 0) 1
 
 record :: (ADTRecord t, Constraints t c, GenericRecordProfunctor p)
        => for c -> (forall s. c s => p s s) -> p t t

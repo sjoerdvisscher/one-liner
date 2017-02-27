@@ -34,6 +34,7 @@ import Data.Bifunctor.Joker
 import Data.Bifunctor.Product
 import Data.Bifunctor.Tannen
 import Data.Functor.Contravariant.Divisible
+import Data.Functor.Compose
 import Data.Profunctor
 import Data.Tagged
 
@@ -186,9 +187,12 @@ instance Functor f => GenericRecordProfunctor (Costar f) where
   unit = Costar $ const U1
   mult (Costar f) (Costar g) = Costar $ \lr -> f (fst1 <$> lr) :*: g (snd1 <$> lr)
 
-instance (Functor f, Applicative g) => GenericRecordProfunctor (Biff (->) f g) where
-  unit = Biff $ const $ pure U1
-  mult (Biff f) (Biff g) = Biff $ \lr -> (:*:) <$> f (fst1 <$> lr) <*> g (snd1 <$> lr)
+instance (Functor f, Applicative g, GenericRecordProfunctor p) => GenericRecordProfunctor (Biff p f g) where
+  unit = Biff $ dimap (const U1) pure unit
+  mult (Biff f) (Biff g) = Biff $ dimap
+    (liftA2 (:*:) (Compose . fmap fst1) (Compose . fmap snd1))
+    (\(Compose l :*: Compose r) -> liftA2 (:*:) l r)
+    (mult (dimap getCompose Compose f) (dimap getCompose Compose g))
 
 instance Applicative f => GenericRecordProfunctor (Joker f) where
   unit = Joker $ pure U1

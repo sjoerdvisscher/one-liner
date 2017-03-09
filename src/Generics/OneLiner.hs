@@ -35,7 +35,8 @@ module Generics.OneLiner (
   consume, consume1,
   -- * Functions for records
   -- | These functions only work for single constructor data types.
-  nullaryOp, unaryOp, binaryOp, algebra, dialgebra, gcotraverse1,
+  nullaryOp, unaryOp, binaryOp, createA', algebra, dialgebra,
+  createA1', gcotraverse1,
   -- * Generic programming with profunctors
   -- | All the above functions have been implemented using these functions,
   -- using different `profunctor`s.
@@ -268,6 +269,20 @@ binaryOp :: (ADTRecord t, Constraints t c)
          => for c -> (forall s. c s => s -> s -> s) -> t -> t -> t
 binaryOp for f = algebra for (\(Pair a b) -> f a b) .: Pair
 
+-- | Create a value of a record type (with exactly one constructor), given
+-- how to construct the components, under an applicative effect.
+--
+-- Here's how to implement `get` from the `binary` package:
+--
+-- @
+-- get = `createA'` (`For` :: `For` Binary) get
+-- @
+--
+-- `createA'` is `record` specialized to `Joker`.
+createA' :: (ADTRecord t, Constraints t c, Applicative f)
+         => for c -> (forall s. c s => f s) -> f t
+createA' for f = runJoker $ record for $ Joker f
+
 data Pair a = Pair a a
 instance Functor Pair where
   fmap f (Pair a b) = Pair (f a) (f b)
@@ -287,6 +302,11 @@ algebra for f = runCostar $ record for $ Costar f
 dialgebra :: (ADTRecord t, Constraints t c, Functor f, Applicative g)
         => for c -> (forall s. c s => f s -> g s) -> f t -> g t
 dialgebra for f = runBiff $ record for $ Biff f
+
+-- | `createA1'` is `record1` specialized to `Joker`.
+createA1' :: (ADTRecord1 t, Constraints1 t c, Applicative f)
+         => for c -> (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
+createA1' for f = dimap Joker runJoker $ record1 for $ dimap runJoker Joker f
 
 -- |
 --

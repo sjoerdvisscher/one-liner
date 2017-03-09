@@ -71,10 +71,11 @@ create = createA
 
 -- | Create a value (one for each constructor), given how to construct the components, under an applicative effect.
 --
--- Here's how to implement `get` from the `binary` package:
+-- Here's how to implement `get` from the `binary` package, first encoding the
+-- constructor in a byte:
 --
 -- @
--- get = getWord8 `>>=` \\ix -> `createA` (`For` :: `For` Binary) [get] `!!` `fromEnum` ix
+-- get = getWord8 `>>=` \\ix -> `getCompose` (`createA` (`For` :: `For` Binary) (`Compose` [get])) `!!` `fromEnum` ix
 -- @
 --
 -- `createA` is `generic` specialized to `Joker`.

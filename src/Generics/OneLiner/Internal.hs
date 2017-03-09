@@ -22,6 +22,7 @@
   , FlexibleInstances
   , ScopedTypeVariables
   , UndecidableInstances
+  , MultiParamTypeClasses
   #-}
 module Generics.OneLiner.Internal where
 
@@ -314,3 +315,38 @@ ctorIndex1 = index $ generic1 (For :: For AnyType) (const $ Ctor (const 0) 1) (C
 -- if you don't actually need a class constraint.
 class AnyType a
 instance AnyType a
+
+-- | The result type of a curried function.
+--
+-- If @r@ is not a function type (i.e., does not unify with `_ -> _`):
+--
+-- @
+-- `Result` (a -> r) ~ r
+-- `Result` (a -> b -> r) ~ r
+-- `Result` (a -> b -> c -> r) ~ r
+-- @
+type family Result t where
+  Result (a -> b) = Result b
+  Result r = r
+
+-- | Automatically apply a lifted function to a polymorphic argument as
+-- many times as possible.
+--
+-- A constraint `FunConstraint t c` is equivalent to the conjunction of
+-- constraints `c s` for every argument type of `t`.
+--
+-- If @r@ is not a function type:
+--
+-- @
+-- c a :- FunConstraints (a -> r) c
+-- (c a, c b) :- FunConstraints (a -> b -> r) c
+-- (c a, c b, c d) :- FunConstraints (a -> b -> d -> r) c
+-- @
+class FunConstraints t c where
+  autoApply :: Applicative f => for c -> (forall s. c s => f s) -> f t -> f (Result t)
+
+instance {-# OVERLAPPING #-} (c a, FunConstraints b c) => FunConstraints (a -> b) c where
+  autoApply for run f = autoApply for run (f <*> run)
+
+instance Result r ~ r => FunConstraints r c where
+  autoApply _for _run r = r

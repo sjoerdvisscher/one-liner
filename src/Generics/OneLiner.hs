@@ -10,6 +10,8 @@
 -- All functions without postfix are for instances of `Generic`, and functions
 -- with postfix `1` are for instances of `Generic1` (with kind @* -> *@) which
 -- get an extra argument to specify how to deal with the parameter.
+-- The function `create_` does not require any such instance, but must be given
+-- a constructor explicitly.
 -----------------------------------------------------------------------------
 {-# LANGUAGE
     RankNTypes
@@ -22,6 +24,7 @@ module Generics.OneLiner (
   -- * Producing values
   create, createA, ctorIndex,
   create1, createA1, ctorIndex1,
+  createA_,
   -- * Traversing values
   gmap, gfoldMap, gtraverse,
   gmap1, gfoldMap1, gtraverse1,
@@ -98,6 +101,19 @@ create1 = createA1
 createA1 :: (ADT1 t, Constraints1 t c, Alternative f)
          => for c -> (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
 createA1 for f = dimap Joker runJoker $ generic1 for $ dimap runJoker Joker f
+
+-- | Create a value, given a constructor (or a function) and
+-- how to construct its components, under an applicative effect.
+--
+-- For example, this is the implementation of `Test.QuickCheck.arbitrary` for a
+-- type with a single constructor (e.g., quadruples @(,,,)@).
+--
+-- @
+-- arbitrary = `createA_` (`For` :: `For` Arbitrary) arbitrary (,,,)
+-- @
+createA_ :: (FunConstraints t c, Applicative f)
+         => for c -> (forall s. c s => f s) -> t -> f (Result t)
+createA_ for run = autoApply for run . pure
 
 -- | `consume1` is `generic1` specialized to `Clown`.
 consume1 :: (ADT1 t, Constraints1 t c, Decidable f)

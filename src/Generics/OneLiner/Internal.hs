@@ -268,6 +268,35 @@ type Constraints1 t c = Constraints1' (Rep1 t) c
 
 -- | `ADT` is a constraint type synonym. The `Generic` instance can be derived,
 -- and any generic representation will be an instance of `ADT'` and `AnyType`.
+-- @'ProfunctorConstraints' t@ reduces to 'GenericRecordProfunctor',
+-- 'GenericNonEmptyProfunctor', or 'GenericProfunctor', depending on the number
+-- of constructors of @t@.
+--
+-- The following list shows how to satisfy 'ADT' constraints used in one-liner.
+--
+-- For instance, @'ADT' t ('Clown' f)@ is entailed by @'Divisible' f@ if @t@ is
+-- a generic data type with a unique constructor, and by @'Decidable' f@
+-- in other cases (0 or more constructors).
+--
+-- The constraints @'ADT' t 'Costar'@ and @'ADT' t 'Tagged'@ are only satisfied
+-- by types @t@ with a unique constructor.
+--
+-- @
+-- 'ADT' t ('Clown'  f) -: 'Divisible' f    -- if t has a unique constructor
+--                  -: 'Decidable' f    -- otherwise
+-- 'ADT' t ('Costar' f) -: 'Functor' f      -- if t has a unique constructor
+-- 'ADT' t ('Joker'  f) -: 'Applicative' f  -- if t has a unique constructor
+--                  -: 'Alternative' f  -- otherwise
+-- 'ADT' t ('Star'   f) -: 'Applicative' f
+-- 'ADT' t ('Zip'    f) -: 'Applicative' f  -- if t has a unique constructor
+--                  -: 'Alternative' f  -- otherwise
+--
+-- 'ADT' t 'Tagged' -: ()                 -- if t has a unique constructor
+-- 'ADT' t (->)   -: ()
+--
+-- 'ADT' t ('Star' ('Const' m))               -: 'Monoid' m
+-- 'ADT' t ('Zip' ('Compose' 'Maybe' ('Const' m)) -: 'Monoid' m
+-- @
 type ADT t p = (Generic t, ADT' (Rep t), Constraints t AnyType, ProfunctorConstraints t p)
 
 type ADT1 t p = (Generic1 t, ADT1' (Rep1 t), Constraints1 t AnyType, ProfunctorConstraints1 t p)

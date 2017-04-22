@@ -131,7 +131,7 @@ gmap :: (ADT t (->), Constraints t c)
      => for c -> (forall s. c s => s -> s) -> t -> t
 gmap = generic
 
--- | Map each component of a structure to a monoid, and combine the results.
+-- | Map each component of a structure to an element of a monoid, and combine the results.
 --
 -- If you have a class `Size`, which measures the size of a structure, then this could be the default implementation:
 --

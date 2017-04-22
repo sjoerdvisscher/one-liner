@@ -213,6 +213,26 @@ instance (Applicative f, GenericProfunctor p) => GenericProfunctor (Tannen f p) 
   zero = Tannen (pure zero)
   identity = Tannen (pure identity)
 
+newtype Zip f a b = Zip { runZip :: a -> a -> f b }
+instance Functor f => Profunctor (Zip f) where
+  dimap f g (Zip h) = Zip $ \a1 a2 -> fmap g (h (f a1) (f a2))
+instance Applicative f => GenericRecordProfunctor (Zip f) where
+  unit = Zip $ \_ _ -> pure U1
+  mult (Zip f) (Zip g) = Zip $ \(al :*: ar) (bl :*: br) -> (:*:) <$> f al bl <*> g ar br
+instance Alternative f => GenericNonEmptyProfunctor (Zip f) where
+  plus (Zip f) (Zip g) = Zip h where
+    h (L1 a) (L1 b) = fmap L1 (f a b)
+    h (R1 a) (R1 b) = fmap R1 (g a b)
+    h _ _ = empty
+instance Alternative f => GenericProfunctor (Zip f) where
+  zero = Zip absurd
+  identity = Zip $ \_ _ -> empty
+
+inm2 :: (t -> t -> m) -> t -> t -> Compose Maybe (Const m) a
+inm2 f = Compose .: Just .: Const .: f
+outm2 :: Monoid m => (t -> t -> Compose Maybe (Const m) a) -> t -> t -> m
+outm2 f = maybe mempty getConst .: getCompose .: f
+
 data Ctor a b = Ctor { index :: a -> Int, count :: Int }
 instance Profunctor Ctor where
   dimap l _ (Ctor i c) = Ctor (i . l) c
@@ -312,3 +332,7 @@ instance {-# OVERLAPPING #-} (c a, FunConstraints b c) => FunConstraints (a -> b
 
 instance Result r ~ r => FunConstraints r c where
   autoApply _for _run r = r
+
+infixr 9 .:
+(.:) :: (c -> d) -> (a -> b -> c) -> (a -> b -> d)
+(.:) = (.) . (.)

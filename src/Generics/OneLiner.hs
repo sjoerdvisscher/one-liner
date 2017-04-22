@@ -216,26 +216,6 @@ zipWithA1 :: (ADT1 t (Zip f), Constraints1 t c)
 zipWithA1 for f = dimap Zip runZip $ generic1 for $ dimap runZip Zip f
 
 
-newtype Zip f a b = Zip { runZip :: a -> a -> f b }
-instance Functor f => Profunctor (Zip f) where
-  dimap f g (Zip h) = Zip $ \a1 a2 -> fmap g (h (f a1) (f a2))
-instance Applicative f => GenericRecordProfunctor (Zip f) where
-  unit = Zip $ \_ _ -> pure U1
-  mult (Zip f) (Zip g) = Zip $ \(al :*: ar) (bl :*: br) -> (:*:) <$> f al bl <*> g ar br
-instance Alternative f => GenericNonEmptyProfunctor (Zip f) where
-  plus (Zip f) (Zip g) = Zip h where
-    h (L1 a) (L1 b) = fmap L1 (f a b)
-    h (R1 a) (R1 b) = fmap R1 (g a b)
-    h _ _ = empty
-instance Alternative f => GenericProfunctor (Zip f) where
-  zero = Zip absurd
-  identity = Zip $ \_ _ -> empty
-
-inm2 :: (t -> t -> m) -> t -> t -> Compose Maybe (Const m) a
-inm2 f = Compose .: Just .: Const .: f
-outm2 :: Monoid m => (t -> t -> Compose Maybe (Const m) a) -> t -> t -> m
-outm2 f = maybe mempty getConst .: getCompose .: f
-
 -- | Implement a nullary operator by calling the operator for each component.
 --
 -- @
@@ -310,7 +290,3 @@ createA1' = createA1
 gcotraverse1 :: (ADT1 t (Costar f), Constraints1 t c)
              => for c -> (forall d e s. c s => (f d -> e) -> f (s d) -> s e) -> (f a -> b) -> f (t a) -> t b
 gcotraverse1 for f p = runCostar $ generic1 for (Costar . f . runCostar) (Costar p)
-
-infixr 9 .:
-(.:) :: (c -> d) -> (a -> b -> c) -> (a -> b -> d)
-(.:) = (.) . (.)

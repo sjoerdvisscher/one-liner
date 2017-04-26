@@ -36,97 +36,115 @@ import Data.Bifunctor.Product
 import Data.Bifunctor.Tannen
 import Data.Functor.Contravariant.Divisible
 import Data.Functor.Compose
+import Data.Functor.Identity
 import Data.Profunctor
+import Data.Proxy
 import Data.Tagged
 
 
-type family Constraints' (t :: * -> *) (c :: * -> Constraint) :: Constraint
-type instance Constraints' V1 c = ()
-type instance Constraints' U1 c = ()
-type instance Constraints' (f :+: g) c = (Constraints' f c, Constraints' g c)
-type instance Constraints' (f :*: g) c = (Constraints' f c, Constraints' g c)
-type instance Constraints' (K1 i a) c = c a
-type instance Constraints' (M1 i t f) c = Constraints' f c
+type family Constraints' (t :: * -> *) (c :: * -> Constraint) (c1 :: (* -> *) -> Constraint) :: Constraint
+type instance Constraints' V1 c c1 = ()
+type instance Constraints' U1 c c1 = ()
+type instance Constraints' (f :+: g) c c1 = (Constraints' f c c1, Constraints' g c c1)
+type instance Constraints' (f :*: g) c c1 = (Constraints' f c c1, Constraints' g c c1)
+type instance Constraints' (f :.: g) c c1 = (c1 f, Constraints' g c c1)
+type instance Constraints' Par1 c c1 = ()
+type instance Constraints' (Rec1 f) c c1 = c1 f
+type instance Constraints' (K1 i a) c c1 = c a
+type instance Constraints' (M1 i t f) c c1 = Constraints' f c c1
 
-class ADT' (t :: * -> *) where
-  generic' :: (Constraints' t c, GenericProfunctor p)
-    => for c -> (forall s. c s => p s s) -> p (t x) (t x)
+type ADT' = ADT_ Identity Proxy ADTProfunctor
+type ADTNonEmpty' = ADT_ Identity Proxy NonEmptyProfunctor
+type ADTRecord' = ADT_ Identity Proxy RecordProfunctor
 
-class ADTNonEmpty' (t :: * -> *) where
-  nonEmpty' :: (Constraints' t c, GenericNonEmptyProfunctor p)
-    => for c -> (forall s. c s => p s s) -> p (t x) (t x)
+type ADT1' = ADT_ Identity Identity ADTProfunctor
+type ADTNonEmpty1' = ADT_ Proxy Identity NonEmptyProfunctor
+type ADTRecord1' = ADT_ Proxy Identity RecordProfunctor
 
-class ADTRecord' (t :: * -> *) where
-  record' :: (Constraints' t c, GenericRecordProfunctor p)
-    => for c -> (forall s. c s => p s s) -> p (t x) (t x)
+type ADTProfunctor = GenericProfunctor ': NonEmptyProfunctor
+type NonEmptyProfunctor = GenericNonEmptyProfunctor ': RecordProfunctor
+type RecordProfunctor = '[GenericRecordProfunctor, Profunctor]
 
-instance ADT' V1 where generic' _ _ = zero
-instance ADT' U1 where generic' _ _ = unit
-instance (ADT' f, ADT' g) => ADT' (f :+: g) where generic' for f = plus (generic' for f) (generic' for f)
-instance (ADT' f, ADT' g) => ADT' (f :*: g) where generic' for f = mult (generic' for f) (generic' for f)
-instance ADT' (K1 i v) where generic' _ = dimap unK1 K1
-instance ADT' f => ADT' (M1 i t f) where generic' for f = dimap unM1 M1 (generic' for f)
+type family Satisfies (p :: * -> * -> *) (ks :: [(* -> * -> *) -> Constraint]) :: Constraint
+type instance Satisfies p (k ': ks) = (k p, Satisfies p ks)
+type instance Satisfies p '[] = ()
 
-instance ADTNonEmpty' U1 where nonEmpty' _ _ = unit
-instance (ADTNonEmpty' f, ADTNonEmpty' g) => ADTNonEmpty' (f :+: g) where nonEmpty' for f = plus (nonEmpty' for f) (nonEmpty' for f)
-instance (ADTNonEmpty' f, ADTNonEmpty' g) => ADTNonEmpty' (f :*: g) where nonEmpty' for f = mult (nonEmpty' for f) (nonEmpty' for f)
-instance ADTNonEmpty' (K1 i v) where nonEmpty' _ = dimap unK1 K1
-instance ADTNonEmpty' f => ADTNonEmpty' (M1 i t f) where nonEmpty' for f = dimap unM1 M1 (nonEmpty' for f)
+class (ks :: [(* -> * -> *) -> Constraint]) |- (k :: (* -> * -> *) -> Constraint) where
+  (|-) :: Satisfies p ks => proxy0 ks -> proxy1 k -> (k p => p a b) -> p a b
 
-instance ADTRecord' U1 where record' _ _ = unit
-instance (ADTRecord' f, ADTRecord' g) => ADTRecord' (f :*: g) where record' for f = mult (record' for f) (record' for f)
-instance ADTRecord' (K1 i v) where record' _ = dimap unK1 K1
-instance ADTRecord' f => ADTRecord' (M1 i t f) where record' for f = dimap unM1 M1 (record' for f)
+instance {-# OVERLAPPABLE #-} ks |- k => (_k ': ks) |- k where
+  (_ :: proxy0 (_k ': ks)) |- proxy1 = (Proxy :: Proxy ks) |- proxy1
 
+instance (k ': _ks) |- k where
+  _ |- _ = id
 
-type family Constraints1' (t :: * -> *) (c :: (* -> *) -> Constraint) :: Constraint
-type instance Constraints1' V1 c = ()
-type instance Constraints1' U1 c = ()
-type instance Constraints1' (f :+: g) c = (Constraints1' f c, Constraints1' g c)
-type instance Constraints1' (f :*: g) c = (Constraints1' f c, Constraints1' g c)
-type instance Constraints1' (f :.: g) c = (c f, Constraints1' g c)
-type instance Constraints1' Par1 c = ()
-type instance Constraints1' (Rec1 f) c = c f
-type instance Constraints1' (K1 i v) c = ()
-type instance Constraints1' (M1 i t f) c = Constraints1' f c
+generic' :: forall t c p ks a b proxy0 for. (ADT_ Identity Proxy ks t, Constraints' t c AnyType, Satisfies p ks)
+         => proxy0 ks
+         -> for c
+         -> (forall s. c s => p s s)
+         -> p (t a) (t b)
+generic' proxy0 for f = generic_ proxy0 (Proxy :: Proxy Identity) for (Identity f) (For :: For AnyType) Proxy Proxy
 
-class ADT1' (t :: * -> *) where
-  generic1' :: (Constraints1' t c, GenericProfunctor p)
-    => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
+nonEmpty1' :: forall t c1 p ks a b proxy0 for. (ADT_ Proxy Identity ks t, Constraints' t AnyType c1, Satisfies p ks)
+           => proxy0 ks
+           -> for c1
+           -> (forall s a b. c1 s => p a b -> p (s a) (s b))
+           -> p a b
+           -> p (t a) (t b)
+nonEmpty1' proxy0 for f p = generic_ proxy0 (Proxy :: Proxy Proxy) (For :: For AnyType) Proxy for (Identity f) (Identity p)
 
-class ADTNonEmpty1' (t :: * -> *) where
-  nonEmpty1' :: (Constraints1' t c, GenericNonEmptyProfunctor p)
-    => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
+generic1' :: forall t c1 p ks a b proxy0 for. (ADT_ Identity Identity ks t, Constraints' t AnyType c1, Satisfies p ks, ks |- GenericProfunctor)
+          => proxy0 ks
+          -> for c1
+          -> (forall s a b. c1 s => p a b -> p (s a) (s b))
+          -> p a b
+          -> p (t a) (t b)
+generic1' proxy0 for f p = (proxy0 |- (Proxy :: Proxy GenericProfunctor))
+  (generic_ proxy0 (Proxy :: Proxy Identity) (For :: For AnyType) (Identity identity) for (Identity f) (Identity p))
 
-class ADTRecord1' (t :: * -> *) where
-  record1' :: (Constraints1' t c, GenericRecordProfunctor p)
-    => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
+class ADT_ nullary (unary :: * -> *) (ks :: [(* -> * -> *) -> Constraint]) (t :: * -> *) where
+  generic_ :: (Constraints' t c c1, Satisfies p ks)
+           => proxy0 ks
+           -> proxy1 nullary
+           -> for c
+           -> (forall s. c s => nullary (p s s))
+           -> for1 c1
+           -> (forall s1 a b. c1 s1 => unary (p a b -> p (s1 a) (s1 b)))
+           -> unary (p a b)
+           -> p (t a) (t b)
 
-instance ADT1' V1 where generic1' _ _ _ = zero
-instance ADT1' U1 where generic1' _ _ _ = unit
-instance (ADT1' f, ADT1' g) => ADT1' (f :+: g) where generic1' for f p = plus (generic1' for f p) (generic1' for f p)
-instance (ADT1' f, ADT1' g) => ADT1' (f :*: g) where generic1' for f p = mult (generic1' for f p) (generic1' for f p)
-instance ADT1' g => ADT1' (f :.: g) where generic1' for f p = dimap unComp1 Comp1 $ f (generic1' for f p)
-instance ADT1' Par1 where generic1' _ _ = dimap unPar1 Par1
-instance ADT1' (Rec1 f) where generic1' _ f p = dimap unRec1 Rec1 (f p)
-instance ADT1' (K1 i v) where generic1' _ _ _ = dimap unK1 K1 identity
-instance ADT1' f => ADT1' (M1 i t f) where generic1' for f p = dimap unM1 M1 (generic1' for f p)
+instance ks |- GenericProfunctor => ADT_ nullary unary ks V1 where
+  generic_ proxy0 _ _ _ _ _ _ = (proxy0 |- (Proxy :: Proxy GenericProfunctor)) zero
 
-instance ADTNonEmpty1' U1 where nonEmpty1' _ _ _ = unit
-instance (ADTNonEmpty1' f, ADTNonEmpty1' g) => ADTNonEmpty1' (f :+: g) where nonEmpty1' for f p = plus (nonEmpty1' for f p) (nonEmpty1' for f p)
-instance (ADTNonEmpty1' f, ADTNonEmpty1' g) => ADTNonEmpty1' (f :*: g) where nonEmpty1' for f p = mult (nonEmpty1' for f p) (nonEmpty1' for f p)
-instance ADTNonEmpty1' g => ADTNonEmpty1' (f :.: g) where nonEmpty1' for f p = dimap unComp1 Comp1 $ f (nonEmpty1' for f p)
-instance ADTNonEmpty1' Par1 where nonEmpty1' _ _ = dimap unPar1 Par1
-instance ADTNonEmpty1' (Rec1 f) where nonEmpty1' _ f p = dimap unRec1 Rec1 (f p)
-instance ADTNonEmpty1' f => ADTNonEmpty1' (M1 i t f) where nonEmpty1' for f p = dimap unM1 M1 (nonEmpty1' for f p)
+instance ks |- GenericRecordProfunctor => ADT_ nullary unary ks U1 where
+  generic_ proxy0 _ _ _ _ _ _ = (proxy0 |- (Proxy :: Proxy GenericRecordProfunctor)) unit
 
-instance ADTRecord1' U1 where record1' _ _ _ = unit
-instance (ADTRecord1' f, ADTRecord1' g) => ADTRecord1' (f :*: g) where record1' for f p = mult (record1' for f p) (record1' for f p)
-instance ADTRecord1' g => ADTRecord1' (f :.: g) where record1' for f p = dimap unComp1 Comp1 $ f (record1' for f p)
-instance ADTRecord1' Par1 where record1' _ _ = dimap unPar1 Par1
-instance ADTRecord1' (Rec1 f) where record1' _ f p = dimap unRec1 Rec1 (f p)
-instance ADTRecord1' f => ADTRecord1' (M1 i t f) where record1' for f p = dimap unM1 M1 (record1' for f p)
+instance (ks |- GenericNonEmptyProfunctor, ADT_ nullary unary ks f, ADT_ nullary unary ks g) => ADT_ nullary unary ks (f :+: g) where
+  generic_ proxy0 proxy1 for f for1 f1 p1 = (proxy0 |- (Proxy :: Proxy GenericNonEmptyProfunctor))
+    (plus (generic_ proxy0 proxy1 for f for1 f1 p1) (generic_ proxy0 proxy1 for f for1 f1 p1))
 
+instance (ks |- GenericRecordProfunctor, ADT_ nullary unary ks f, ADT_ nullary unary ks g) => ADT_ nullary unary ks (f :*: g) where
+  generic_ proxy0 proxy1 for f for1 f1 p1 = (proxy0 |- (Proxy :: Proxy GenericRecordProfunctor))
+    (mult (generic_ proxy0 proxy1 for f for1 f1 p1) (generic_ proxy0 proxy1 for f for1 f1 p1))
+
+instance ks |- Profunctor => ADT_ Identity unary ks (K1 i v) where
+  generic_ proxy0 _ _ f _ _ _ = (proxy0 |- (Proxy :: Proxy Profunctor)) (dimap unK1 K1 (runIdentity f))
+
+instance (ks |- Profunctor, ADT_ nullary unary ks f) => ADT_ nullary unary ks (M1 i c f) where
+  generic_ proxy0 proxy1 for f for1 f1 p1 = (proxy0 |- (Proxy :: Proxy Profunctor))
+    (dimap unM1 M1 (generic_ proxy0 proxy1 for f for1 f1 p1))
+
+instance (ks |- Profunctor, ADT_ nullary Identity ks g) => ADT_ nullary Identity ks (f :.: g) where
+  generic_ proxy0 proxy1 for f for1 f1 p1 = (proxy0 |- (Proxy :: Proxy Profunctor))
+    (dimap unComp1 Comp1 $ runIdentity f1 (generic_ proxy0 proxy1 for f for1 f1 p1))
+
+instance ks |- Profunctor => ADT_ nullary Identity ks Par1 where
+  generic_ proxy0 _ _ _ _ _ p = (proxy0 |- (Proxy :: Proxy Profunctor))
+    (dimap unPar1 Par1 (runIdentity p))
+
+instance ks |- Profunctor => ADT_ nullary Identity ks (Rec1 f) where
+  generic_ proxy0 _ _ _ _ f p = (proxy0 |- (Proxy :: Proxy Profunctor))
+    (dimap unRec1 Rec1 (runIdentity (f <*> p)))
 
 absurd :: V1 a -> b
 absurd = \case {}
@@ -245,34 +263,34 @@ instance GenericProfunctor Ctor where
 
 record :: (ADTRecord t, Constraints t c, GenericRecordProfunctor p)
        => for c -> (forall s. c s => p s s) -> p t t
-record for f = dimap from to $ record' for f
+record for f = dimap from to $ generic' (Proxy :: Proxy RecordProfunctor) for f
 
 record1 :: (ADTRecord1 t, Constraints1 t c, GenericRecordProfunctor p)
         => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
-record1 for f p = dimap from1 to1 $ record1' for f p
+record1 for f p = dimap from1 to1 $ nonEmpty1' (Proxy :: Proxy RecordProfunctor) for f p
 
 nonEmpty :: (ADTNonEmpty t, Constraints t c, GenericNonEmptyProfunctor p)
          => for c -> (forall s. c s => p s s) -> p t t
-nonEmpty for f = dimap from to $ nonEmpty' for f
+nonEmpty for f = dimap from to $ generic' (Proxy :: Proxy NonEmptyProfunctor) for f
 
 nonEmpty1 :: (ADTNonEmpty1 t, Constraints1 t c, GenericNonEmptyProfunctor p)
           => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
-nonEmpty1 for f p = dimap from1 to1 $ nonEmpty1' for f p
+nonEmpty1 for f p = dimap from1 to1 $ nonEmpty1' (Proxy :: Proxy NonEmptyProfunctor) for f p
 
 generic :: (ADT t, Constraints t c, GenericProfunctor p)
         => for c -> (forall s. c s => p s s) -> p t t
-generic for f = dimap from to $ generic' for f
+generic for f = dimap from to $ generic' (Proxy :: Proxy ADTProfunctor) for f
 
 generic1 :: (ADT1 t, Constraints1 t c, GenericProfunctor p)
          => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
-generic1 for f p = dimap from1 to1 $ generic1' for f p
+generic1 for f p = dimap from1 to1 $ generic1' (Proxy :: Proxy ADTProfunctor) for f p
 
 -- | `Constraints` is a constraint type synonym, containing the constraint
 -- requirements for an instance for `t` of class `c`.
 -- It requires an instance of class `c` for each component of `t`.
-type Constraints t c = Constraints' (Rep t) c
+type Constraints t c = (Constraints' (Rep t) c AnyType)
 
-type Constraints1 t c = Constraints1' (Rep1 t) c
+type Constraints1 t c = Constraints' (Rep1 t) AnyType c
 
 -- | `ADTRecord` is a constraint type synonym. An instance is an `ADT` with *exactly* one constructor.
 type ADTRecord t = (Generic t, ADTRecord' (Rep t), Constraints t AnyType)
@@ -313,8 +331,8 @@ ctorIndex1 = index $ generic1 (For :: For AnyType) (const $ Ctor (const 0) 1) (C
 
 -- | Any type is instance of `AnyType`, you can use it with @For :: For AnyType@
 -- if you don't actually need a class constraint.
-class AnyType a
-instance AnyType a
+class AnyType (a :: k)
+instance AnyType (a :: k)
 
 -- | The result type of a curried function.
 --

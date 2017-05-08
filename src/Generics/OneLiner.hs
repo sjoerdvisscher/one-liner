@@ -10,6 +10,8 @@
 -- All functions without postfix are for instances of `Generic`, and functions
 -- with postfix `1` are for instances of `Generic1` (with kind @* -> *@) which
 -- get an extra argument to specify how to deal with the parameter.
+-- The function `create_` does not require any such instance, but must be given
+-- a constructor explicitly.
 -----------------------------------------------------------------------------
 {-# LANGUAGE
     RankNTypes
@@ -25,6 +27,7 @@ module Generics.OneLiner (
   -- * Producing values
   create, createA, ctorIndex,
   create1, createA1, ctorIndex1,
+  createA_,
   -- * Traversing values
   gmap, gfoldMap, gtraverse,
   gmap1, gfoldMap1, gtraverse1,
@@ -35,13 +38,14 @@ module Generics.OneLiner (
   consume, consume1,
   -- * Functions for records
   -- | These functions only work for single constructor data types.
-  nullaryOp, unaryOp, binaryOp, algebra, dialgebra, gcotraverse1,
+  nullaryOp, unaryOp, binaryOp, createA', algebra, dialgebra,
+  createA1', gcotraverse1,
   -- * Generic programming with profunctors
   -- | All the above functions have been implemented using these functions,
   -- using different `profunctor`s.
-  GenericRecordProfunctor(..), record, record1,
-  GenericNonEmptyProfunctor(..), nonEmpty, nonEmpty1,
-  GenericProfunctor(..), generic, generic1,
+  GenericRecordProfunctor, GenericUnitProfunctor(..), GenericProductProfunctor(..), record, record1,
+  GenericNonEmptyProfunctor, GenericSumProfunctor(..), nonEmpty, nonEmpty1,
+  GenericProfunctor, GenericEmptyProfunctor(..), generic, generic1,
   -- * Types
   ADT, ADTNonEmpty, ADTRecord, Constraints,
   ADT1, ADTNonEmpty1, ADTRecord1, Constraints1,
@@ -74,10 +78,11 @@ create = createA @c
 
 -- | Create a value (one for each constructor), given how to construct the components, under an applicative effect.
 --
--- Here's how to implement `get` from the `binary` package:
+-- Here's how to implement `get` from the `binary` package, first encoding the
+-- constructor in a byte:
 --
 -- @
--- get = getWord8 `>>=` \\ix -> `createA` \@Binary [get] `!!` `fromEnum` ix
+-- get = getWord8 `>>=` \\ix -> `getCompose` (`createA` \@Binary (`Compose` [get])) `!!` `fromEnum` ix
 -- @
 --
 -- `createA` is `generic` specialized to `Joker`.
@@ -101,6 +106,19 @@ create1 = createA1 @c
 createA1 :: forall c t f a. (ADT1 t, Constraints1 t c, Alternative f)
          => (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
 createA1 f = dimap Joker runJoker $ generic1 @c $ dimap runJoker Joker f
+
+-- | Create a value, given a constructor (or a function) and
+-- how to construct its components, under an applicative effect.
+--
+-- For example, this is the implementation of `Test.QuickCheck.arbitrary` for a
+-- type with a single constructor (e.g., quadruples @(,,,)@).
+--
+-- @
+-- arbitrary = `createA_` (`For` :: `For` Arbitrary) arbitrary (,,,)
+-- @
+createA_ :: (FunConstraints t c, Applicative f)
+         => for c -> (forall s. c s => f s) -> t -> f (Result t)
+createA_ for run = autoApply for run . pure
 
 -- | `consume1` is `generic1` specialized to `Clown`.
 consume1 :: forall c t f a. (ADT1 t, Constraints1 t c, Decidable f)
@@ -203,15 +221,16 @@ zipWithA1 f = dimap Zip runZip $ generic1 @c $ dimap runZip Zip f
 newtype Zip f a b = Zip { runZip :: a -> a -> f b }
 instance Functor f => Profunctor (Zip f) where
   dimap f g (Zip h) = Zip $ \a1 a2 -> fmap g (h (f a1) (f a2))
-instance Applicative f => GenericRecordProfunctor (Zip f) where
+instance Applicative f => GenericUnitProfunctor (Zip f) where
   unit = Zip $ \_ _ -> pure U1
+instance Applicative f => GenericProductProfunctor (Zip f) where
   mult (Zip f) (Zip g) = Zip $ \(al :*: ar) (bl :*: br) -> (:*:) <$> f al bl <*> g ar br
-instance Alternative f => GenericNonEmptyProfunctor (Zip f) where
+instance Alternative f => GenericSumProfunctor (Zip f) where
   plus (Zip f) (Zip g) = Zip h where
     h (L1 a) (L1 b) = fmap L1 (f a b)
     h (R1 a) (R1 b) = fmap R1 (g a b)
     h _ _ = empty
-instance Alternative f => GenericProfunctor (Zip f) where
+instance Alternative f => GenericEmptyProfunctor (Zip f) where
   zero = Zip absurd
   identity = Zip $ \_ _ -> empty
 
@@ -254,6 +273,20 @@ binaryOp :: forall c t. (ADTRecord t, Constraints t c)
          => (forall s. c s => s -> s -> s) -> t -> t -> t
 binaryOp f = algebra @c (\(Pair a b) -> f a b) .: Pair
 
+-- | Create a value of a record type (with exactly one constructor), given
+-- how to construct the components, under an applicative effect.
+--
+-- Here's how to implement `get` from the `binary` package:
+--
+-- @
+-- get = `createA'` (`For` :: `For` Binary) get
+-- @
+--
+-- `createA'` is `record` specialized to `Joker`.
+createA' :: forall c t f. (ADTRecord t, Constraints t c, Applicative f)
+         => (forall s. c s => f s) -> f t
+createA' f = runJoker $ record @c $ Joker f
+
 data Pair a = Pair a a
 instance Functor Pair where
   fmap f (Pair a b) = Pair (f a) (f b)
@@ -273,6 +306,11 @@ algebra f = runCostar $ record @c $ Costar f
 dialgebra :: forall c t f g. (ADTRecord t, Constraints t c, Functor f, Applicative g)
         => (forall s. c s => f s -> g s) -> f t -> g t
 dialgebra f = runBiff $ record @c $ Biff f
+
+-- | `createA1'` is `record1` specialized to `Joker`.
+createA1' :: forall c t f a. (ADTRecord1 t, Constraints1 t c, Applicative f)
+         => (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
+createA1' f = dimap Joker runJoker $ record1 @c $ dimap runJoker Joker f
 
 -- |
 --

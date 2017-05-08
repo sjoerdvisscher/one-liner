@@ -1,6 +1,6 @@
 -- This is a go at creating lenses with one-liner.
 -- It is not a perfect match, but with some unsafeCoerce here and there it works.
-{-# LANGUAGE RankNTypes, TypeOperators, DefaultSignatures, FlexibleContexts, DeriveGeneric, DeriveAnyClass #-}
+{-# LANGUAGE RankNTypes, TypeOperators, DefaultSignatures, FlexibleContexts, DeriveGeneric, DeriveAnyClass, TypeApplications #-}
 import Generics.OneLiner
 import Data.Profunctor
 import GHC.Generics
@@ -20,8 +20,9 @@ index f l = getConst $ l Const f
 newtype Lensed s t a b = Lensed { getLensed :: Lens s t a b -> b }
 instance Profunctor (Lensed s t) where
   dimap f g (Lensed ix) = Lensed $ \l -> g (ix (l . (fmap g .) . (. f)))
-instance GenericRecordProfunctor (Lensed s t) where
+instance GenericUnitProfunctor (Lensed s t) where
   unit = Lensed (constLens U1)
+instance GenericProductProfunctor (Lensed s t) where  
   mult (Lensed a) (Lensed b) = Lensed (\l -> a (l . fstl) :*: b (l . sndl))
 
 -- GenericRecordProfunctor is a bit too polymorphic,
@@ -36,7 +37,7 @@ class Repr f where
 
   lensed :: (Lens s t a b -> b) -> Lens s t (f a) (f b) -> f b
   default lensed :: (ADTRecord1 f, Constraints1 f Repr) => (Lens s t a b -> b) -> Lens s t (f a) (f b) -> f b
-  lensed f = getLensed $ record1 (For :: For Repr) (\(Lensed g) -> Lensed $ lensed g) (Lensed f)
+  lensed f = getLensed $ record1 @Repr (\(Lensed g) -> Lensed $ lensed g) (Lensed f)
 
   tabulate :: (Key f -> a) -> f a
   tabulate f = lensed (\l -> f (runKey (unsafeCoerce (Lens l)))) id

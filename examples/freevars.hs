@@ -1,6 +1,6 @@
 -- Another go at this problem:
 -- https://github.com/sjoerdvisscher/blog/blob/master/2012/2012-03-03%20how%20to%20work%20generically%20with%20mutually%20recursive%20datatypes.md
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts, DeriveGeneric #-}
+{-# LANGUAGE TypeSynonymInstances, TypeApplications, FlexibleInstances, FlexibleContexts, DeriveGeneric #-}
 
 import GHC.Generics
 import Generics.OneLiner
@@ -22,7 +22,7 @@ class Vars t where
   vars :: t -> [Var] -> ([Var], [Var])
 
 varsDefault :: (ADT t, Constraints t Vars) => t -> [Var] -> ([Var], [Var])
-varsDefault = gfoldMap (For :: For Vars) vars
+varsDefault = gfoldMap @Vars vars
 
 instance Vars Var where
   vars v = const ([], [v])

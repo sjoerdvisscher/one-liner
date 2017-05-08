@@ -18,8 +18,10 @@
   , TypeFamilies
   , TypeOperators
   , ConstraintKinds
+  , TypeApplications
   , FlexibleContexts
   , FlexibleInstances
+  , AllowAmbiguousTypes
   , ScopedTypeVariables
   , UndecidableInstances
   #-}
@@ -36,6 +38,7 @@ import Data.Bifunctor.Tannen
 import Data.Functor.Contravariant.Divisible
 import Data.Functor.Compose
 import Data.Profunctor
+import Data.Proxy
 import Data.Tagged
 
 
@@ -242,29 +245,29 @@ instance GenericProfunctor Ctor where
   zero = Ctor (const 0) 0
   identity = Ctor (const 0) 1
 
-record :: (ADTRecord t, Constraints t c, GenericRecordProfunctor p)
-       => for c -> (forall s. c s => p s s) -> p t t
-record for f = dimap from to $ record' for f
+record :: forall c p t. (ADTRecord t, Constraints t c, GenericRecordProfunctor p)
+       => (forall s. c s => p s s) -> p t t
+record f = dimap from to $ record' (Proxy :: Proxy c) f
 
-record1 :: (ADTRecord1 t, Constraints1 t c, GenericRecordProfunctor p)
-        => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
-record1 for f p = dimap from1 to1 $ record1' for f p
+record1 :: forall c p t a b. (ADTRecord1 t, Constraints1 t c, GenericRecordProfunctor p)
+        => (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
+record1 f p = dimap from1 to1 $ record1' (Proxy :: Proxy c) f p
 
-nonEmpty :: (ADTNonEmpty t, Constraints t c, GenericNonEmptyProfunctor p)
-         => for c -> (forall s. c s => p s s) -> p t t
-nonEmpty for f = dimap from to $ nonEmpty' for f
+nonEmpty :: forall c p t. (ADTNonEmpty t, Constraints t c, GenericNonEmptyProfunctor p)
+         => (forall s. c s => p s s) -> p t t
+nonEmpty f = dimap from to $ nonEmpty' (Proxy :: Proxy c) f
 
-nonEmpty1 :: (ADTNonEmpty1 t, Constraints1 t c, GenericNonEmptyProfunctor p)
-          => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
-nonEmpty1 for f p = dimap from1 to1 $ nonEmpty1' for f p
+nonEmpty1 :: forall c p t a b. (ADTNonEmpty1 t, Constraints1 t c, GenericNonEmptyProfunctor p)
+          => (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
+nonEmpty1 f p = dimap from1 to1 $ nonEmpty1' (Proxy :: Proxy c) f p
 
-generic :: (ADT t, Constraints t c, GenericProfunctor p)
-        => for c -> (forall s. c s => p s s) -> p t t
-generic for f = dimap from to $ generic' for f
+generic :: forall c p t. (ADT t, Constraints t c, GenericProfunctor p)
+        => (forall s. c s => p s s) -> p t t
+generic f = dimap from to $ generic' (Proxy :: Proxy c) f
 
-generic1 :: (ADT1 t, Constraints1 t c, GenericProfunctor p)
-         => for c -> (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
-generic1 for f p = dimap from1 to1 $ generic1' for f p
+generic1 :: forall c p t a b. (ADT1 t, Constraints1 t c, GenericProfunctor p)
+         => (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
+generic1 f p = dimap from1 to1 $ generic1' (Proxy :: Proxy c) f p
 
 -- | `Constraints` is a constraint type synonym, containing the constraint
 -- requirements for an instance for `t` of class `c`.
@@ -289,28 +292,21 @@ type ADT t = (Generic t, ADT' (Rep t), Constraints t AnyType)
 
 type ADT1 t = (Generic1 t, ADT1' (Rep1 t), Constraints1 t AnyType)
 
--- | Tell the compiler which class we want to use in the traversal. Should be used like this:
---
--- > (For :: For Show)
---
--- Where @Show@ can be any class.
-data For (c :: k -> Constraint) = For
-
 -- | Get the index in the lists returned by `create` and `createA` of the constructor of the given value.
 --
 -- For example, this is the implementation of `put` that generates the binary data that
 -- the above implentation of `get` expects:
 --
 -- @
--- `put` t = `putWord8` (`toEnum` (`ctorIndex` t)) `<>` `gfoldMap` (`For` :: `For` `Binary`) `put` t
+-- `put` t = `putWord8` (`toEnum` (`ctorIndex` t)) `<>` `gfoldMap` \@`Binary` `put` t
 -- @
 ctorIndex :: ADT t => t -> Int
-ctorIndex = index $ generic (For :: For AnyType) (Ctor (const 0) 1)
+ctorIndex = index $ generic @AnyType (Ctor (const 0) 1)
 
 ctorIndex1 :: ADT1 t => t a -> Int
-ctorIndex1 = index $ generic1 (For :: For AnyType) (const $ Ctor (const 0) 1) (Ctor (const 0) 1)
+ctorIndex1 = index $ generic1 @AnyType (const $ Ctor (const 0) 1) (Ctor (const 0) 1)
 
--- | Any type is instance of `AnyType`, you can use it with @For :: For AnyType@
+-- | Any type is instance of `AnyType`, you can use it with @\@`AnyType`@
 -- if you don't actually need a class constraint.
 class AnyType a
 instance AnyType a

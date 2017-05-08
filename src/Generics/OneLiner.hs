@@ -17,6 +17,9 @@
   , TypeFamilies
   , ConstraintKinds
   , FlexibleContexts
+  , TypeApplications
+  , AllowAmbiguousTypes
+  , ScopedTypeVariables
   #-}
 module Generics.OneLiner (
   -- * Producing values
@@ -42,7 +45,7 @@ module Generics.OneLiner (
   -- * Types
   ADT, ADTNonEmpty, ADTRecord, Constraints,
   ADT1, ADTNonEmpty1, ADTRecord1, Constraints1,
-  For(..), AnyType
+  AnyType
 ) where
 
 import GHC.Generics
@@ -60,141 +63,141 @@ import Generics.OneLiner.Internal
 -- | Create a value (one for each constructor), given how to construct the components.
 --
 -- @
--- `minBound` = `head` `$` `create` (`For` :: `For` `Bounded`) [`minBound`]
--- `maxBound` = `last` `$` `create` (`For` :: `For` `Bounded`) [`maxBound`]
+-- `minBound` = `head` `$` `create` \@`Bounded` [`minBound`]
+-- `maxBound` = `last` `$` `create` \@`Bounded` [`maxBound`]
 -- @
 --
 -- `create` is `createA` specialized to lists.
-create :: (ADT t, Constraints t c)
-       => for c -> (forall s. c s => [s]) -> [t]
-create = createA
+create :: forall c t. (ADT t, Constraints t c)
+       => (forall s. c s => [s]) -> [t]
+create = createA @c
 
 -- | Create a value (one for each constructor), given how to construct the components, under an applicative effect.
 --
 -- Here's how to implement `get` from the `binary` package:
 --
 -- @
--- get = getWord8 `>>=` \\ix -> `createA` (`For` :: `For` Binary) [get] `!!` `fromEnum` ix
+-- get = getWord8 `>>=` \\ix -> `createA` \@Binary [get] `!!` `fromEnum` ix
 -- @
 --
 -- `createA` is `generic` specialized to `Joker`.
-createA :: (ADT t, Constraints t c, Alternative f)
-        => for c -> (forall s. c s => f s) -> f t
-createA for f = runJoker $ generic for $ Joker f
+createA :: forall c t f. (ADT t, Constraints t c, Alternative f)
+        => (forall s. c s => f s) -> f t
+createA f = runJoker $ generic @c $ Joker f
 
 -- | Generate ways to consume values of type `t`. This is the contravariant version of `createA`.
 --
 -- `consume` is `generic` specialized to `Clown`.
-consume :: (ADT t, Constraints t c, Decidable f)
-        => for c -> (forall s. c s => f s) -> f t
-consume for f = runClown $ generic for $ Clown f
+consume :: forall c t f. (ADT t, Constraints t c, Decidable f)
+        => (forall s. c s => f s) -> f t
+consume f = runClown $ generic @c $ Clown f
 
 -- | `create1` is `createA1` specialized to lists.
-create1 :: (ADT1 t, Constraints1 t c)
-        => for c -> (forall b s. c s => [b] -> [s b]) -> [a] -> [t a]
-create1 = createA1
+create1 :: forall c t a. (ADT1 t, Constraints1 t c)
+        => (forall b s. c s => [b] -> [s b]) -> [a] -> [t a]
+create1 = createA1 @c
 
 -- | `createA1` is `generic1` specialized to `Joker`.
-createA1 :: (ADT1 t, Constraints1 t c, Alternative f)
-         => for c -> (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
-createA1 for f = dimap Joker runJoker $ generic1 for $ dimap runJoker Joker f
+createA1 :: forall c t f a. (ADT1 t, Constraints1 t c, Alternative f)
+         => (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
+createA1 f = dimap Joker runJoker $ generic1 @c $ dimap runJoker Joker f
 
 -- | `consume1` is `generic1` specialized to `Clown`.
-consume1 :: (ADT1 t, Constraints1 t c, Decidable f)
-         => for c -> (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
-consume1 for f = dimap Clown runClown $ generic1 for $ dimap runClown Clown f
+consume1 :: forall c t f a. (ADT1 t, Constraints1 t c, Decidable f)
+         => (forall b s. c s => f b -> f (s b)) -> f a -> f (t a)
+consume1 f = dimap Clown runClown $ generic1 @c $ dimap runClown Clown f
 
 
 -- | Map over a structure, updating each component.
 --
 -- `gmap` is `generic` specialized to @(->)@.
-gmap :: (ADT t, Constraints t c)
-     => for c -> (forall s. c s => s -> s) -> t -> t
-gmap = generic
+gmap :: forall c t. (ADT t, Constraints t c)
+     => (forall s. c s => s -> s) -> t -> t
+gmap = generic @c
 
 -- | Map each component of a structure to a monoid, and combine the results.
 --
 -- If you have a class `Size`, which measures the size of a structure, then this could be the default implementation:
 --
 -- @
--- size = `succ` `.` `getSum` `.` `gfoldMap` (`For` :: `For` Size) (`Sum` `.` size)
+-- size = `succ` `.` `getSum` `.` `gfoldMap` \@`Size` (`Sum` `.` size)
 -- @
 --
 -- `gfoldMap` is `gtraverse` specialized to `Const`.
-gfoldMap :: (ADT t, Constraints t c, Monoid m)
-         => for c -> (forall s. c s => s -> m) -> t -> m
-gfoldMap for f = getConst . gtraverse for (Const . f)
+gfoldMap :: forall c t m. (ADT t, Constraints t c, Monoid m)
+         => (forall s. c s => s -> m) -> t -> m
+gfoldMap f = getConst . gtraverse @c (Const . f)
 
 -- | Map each component of a structure to an action, evaluate these actions from left to right, and collect the results.
 --
 -- `gtraverse` is `generic` specialized to `Star`.
-gtraverse :: (ADT t, Constraints t c, Applicative f)
-          => for c -> (forall s. c s => s -> f s) -> t -> f t
-gtraverse for f = runStar $ generic for $ Star f
+gtraverse :: forall c t f. (ADT t, Constraints t c, Applicative f)
+          => (forall s. c s => s -> f s) -> t -> f t
+gtraverse f = runStar $ generic @c $ Star f
 
 -- |
 -- @
--- fmap = `gmap1` (`For` :: `For` `Functor`) `fmap`
+-- fmap = `gmap1` \@`Functor` `fmap`
 -- @
 --
 -- `gmap1` is `generic1` specialized to @(->)@.
-gmap1 :: (ADT1 t, Constraints1 t c)
-     => for c -> (forall d e s. c s => (d -> e) -> s d -> s e) -> (a -> b) -> t a -> t b
-gmap1 = generic1
+gmap1 :: forall c t a b. (ADT1 t, Constraints1 t c)
+     => (forall d e s. c s => (d -> e) -> s d -> s e) -> (a -> b) -> t a -> t b
+gmap1 = generic1 @c
 
 -- |
 -- @
--- foldMap = `gfoldMap1` (`For` :: `For` `Foldable`) `foldMap`
+-- foldMap = `gfoldMap1` \@`Foldable` `foldMap`
 -- @
 --
 -- `gfoldMap1` is `gtraverse1` specialized to `Const`.
-gfoldMap1 :: (ADT1 t, Constraints1 t c, Monoid m)
-          => for c -> (forall s b. c s => (b -> m) -> s b -> m) -> (a -> m) -> t a -> m
-gfoldMap1 for f = dimap (Const .) (getConst .) $ gtraverse1 for $ dimap (getConst .) (Const .) f
+gfoldMap1 :: forall c t m a. (ADT1 t, Constraints1 t c, Monoid m)
+          => (forall s b. c s => (b -> m) -> s b -> m) -> (a -> m) -> t a -> m
+gfoldMap1 f = dimap (Const .) (getConst .) $ gtraverse1 @c $ dimap (getConst .) (Const .) f
 
 -- |
 -- @
--- traverse = `gtraverse1` (`For` :: `For` `Traversable`) `traverse`
+-- traverse = `gtraverse1` \@`Traversable` `traverse`
 -- @
 --
 -- `gtraverse1` is `generic1` specialized to `Star`.
-gtraverse1 :: (ADT1 t, Constraints1 t c, Applicative f)
-           => for c -> (forall d e s. c s => (d -> f e) -> s d -> f (s e)) -> (a -> f b) -> t a -> f (t b)
-gtraverse1 for f = dimap Star runStar $ generic1 for $ dimap runStar Star f
+gtraverse1 :: forall c t f a b. (ADT1 t, Constraints1 t c, Applicative f)
+           => (forall d e s. c s => (d -> f e) -> s d -> f (s e)) -> (a -> f b) -> t a -> f (t b)
+gtraverse1 f = dimap Star runStar $ generic1 @c $ dimap runStar Star f
 
 -- | Combine two values by combining each component of the structures to a monoid, and combine the results.
 -- Returns `mempty` if the constructors don't match.
 --
 -- @
--- `compare` s t = `compare` (`ctorIndex` s) (`ctorIndex` t) `<>` `mzipWith` (`For` :: `For` `Ord`) `compare` s t
+-- `compare` s t = `compare` (`ctorIndex` s) (`ctorIndex` t) `<>` `mzipWith` \@`Ord` `compare` s t
 -- @
 --
 -- `mzipWith` is `zipWithA` specialized to @`Compose` `Maybe` (`Const` m)@
-mzipWith :: (ADT t, Constraints t c, Monoid m)
-         => for c -> (forall s. c s => s -> s -> m) -> t -> t -> m
-mzipWith for f = outm2 $ zipWithA for $ inm2 f
+mzipWith :: forall c t m. (ADT t, Constraints t c, Monoid m)
+         => (forall s. c s => s -> s -> m) -> t -> t -> m
+mzipWith f = outm2 $ zipWithA @c $ inm2 f
 
 -- | Combine two values by combining each component of the structures with the given function, under an applicative effect.
 -- Returns `empty` if the constructors don't match.
-zipWithA :: (ADT t, Constraints t c, Alternative f)
-         => for c -> (forall s. c s => s -> s -> f s) -> t -> t -> f t
-zipWithA for f = runZip $ generic for $ Zip f
+zipWithA :: forall c t f. (ADT t, Constraints t c, Alternative f)
+         => (forall s. c s => s -> s -> f s) -> t -> t -> f t
+zipWithA f = runZip $ generic @c $ Zip f
 
 -- |
 -- @
--- liftCompare = mzipWith1 (For :: For Ord1) liftCompare
+-- `liftCompare` = `mzipWith1` \@`Ord1` `liftCompare`
 -- @
 --
 -- `mzipWith1` is `zipWithA1` specialized to @`Compose` `Maybe` (`Const` m)@
-mzipWith1 :: (ADT1 t, Constraints1 t c, Monoid m)
-          => for c -> (forall s b. c s => (b -> b -> m) -> s b -> s b -> m)
+mzipWith1 :: forall c t m a. (ADT1 t, Constraints1 t c, Monoid m)
+          => (forall s b. c s => (b -> b -> m) -> s b -> s b -> m)
           -> (a -> a -> m) -> t a -> t a -> m
-mzipWith1 for f = dimap inm2 outm2 $ zipWithA1 for $ dimap outm2 inm2 f
+mzipWith1 f = dimap inm2 outm2 $ zipWithA1 @c $ dimap outm2 inm2 f
 
-zipWithA1 :: (ADT1 t, Constraints1 t c, Alternative f)
-          => for c -> (forall d e s. c s => (d -> d -> f e) -> s d -> s d -> f (s e))
+zipWithA1 :: forall c t f a b. (ADT1 t, Constraints1 t c, Alternative f)
+          => (forall d e s. c s => (d -> d -> f e) -> s d -> s d -> f (s e))
           -> (a -> a -> f b) -> t a -> t a -> f (t b)
-zipWithA1 for f = dimap Zip runZip $ generic1 for $ dimap runZip Zip f
+zipWithA1 f = dimap Zip runZip $ generic1 @c $ dimap runZip Zip f
 
 
 newtype Zip f a b = Zip { runZip :: a -> a -> f b }
@@ -220,36 +223,36 @@ outm2 f = maybe mempty getConst .: getCompose .: f
 -- | Implement a nullary operator by calling the operator for each component.
 --
 -- @
--- `mempty` = `nullaryOp` (`For` :: `For` `Monoid`) `mempty`
--- `fromInteger` i = `nullaryOp` (`For` :: `For` `Num`) (`fromInteger` i)
+-- `mempty` = `nullaryOp` \@`Monoid` `mempty`
+-- `fromInteger` i = `nullaryOp` \@`Num` (`fromInteger` i)
 -- @
 --
 -- `nullaryOp` is `record` specialized to `Tagged`.
-nullaryOp :: (ADTRecord t, Constraints t c)
-          => for c -> (forall s. c s => s) -> t
-nullaryOp for f = unTagged $ record for $ Tagged f
+nullaryOp :: forall c t. (ADTRecord t, Constraints t c)
+          => (forall s. c s => s) -> t
+nullaryOp f = unTagged $ record @c $ Tagged f
 
 -- | Implement a unary operator by calling the operator on the components.
 -- This is here for consistency, it is the same as `record`.
 --
 -- @
--- `negate` = `unaryOp` (`For` :: `For` `Num`) `negate`
+-- `negate` = `unaryOp` \@`Num` `negate`
 -- @
-unaryOp :: (ADTRecord t, Constraints t c)
-        => for c -> (forall s. c s => s -> s) -> t -> t
-unaryOp = record
+unaryOp :: forall c t. (ADTRecord t, Constraints t c)
+        => (forall s. c s => s -> s) -> t -> t
+unaryOp = record @c
 
 -- | Implement a binary operator by calling the operator on the components.
 --
 -- @
--- `mappend` = `binaryOp` (`For` :: `For` `Monoid`) `mappend`
--- (`+`) = `binaryOp` (`For` :: `For` `Num`) (`+`)
+-- `mappend` = `binaryOp` \@`Monoid` `mappend`
+-- (`+`) = `binaryOp` \@`Num` (`+`)
 -- @
 --
 -- `binaryOp` is `algebra` specialized to pairs.
-binaryOp :: (ADTRecord t, Constraints t c)
-         => for c -> (forall s. c s => s -> s -> s) -> t -> t -> t
-binaryOp for f = algebra for (\(Pair a b) -> f a b) .: Pair
+binaryOp :: forall c t. (ADTRecord t, Constraints t c)
+         => (forall s. c s => s -> s -> s) -> t -> t -> t
+binaryOp f = algebra @c (\(Pair a b) -> f a b) .: Pair
 
 data Pair a = Pair a a
 instance Functor Pair where
@@ -258,29 +261,29 @@ instance Functor Pair where
 -- | Create an F-algebra, given an F-algebra for each of the components.
 --
 -- @
--- `binaryOp` for f l r = `algebra` for (\\(Pair a b) -> f a b) (Pair l r)
+-- `binaryOp` f l r = `algebra` \@c (\\(Pair a b) -> f a b) (Pair l r)
 -- @
 --
 -- `algebra` is `record` specialized to `Costar`.
-algebra :: (ADTRecord t, Constraints t c, Functor f)
-        => for c -> (forall s. c s => f s -> s) -> f t -> t
-algebra for f = runCostar $ record for $ Costar f
+algebra :: forall c t f. (ADTRecord t, Constraints t c, Functor f)
+        => (forall s. c s => f s -> s) -> f t -> t
+algebra f = runCostar $ record @c $ Costar f
 
 -- | `dialgebra` is `record` specialized to @`Biff` (->)@.
-dialgebra :: (ADTRecord t, Constraints t c, Functor f, Applicative g)
-        => for c -> (forall s. c s => f s -> g s) -> f t -> g t
-dialgebra for f = runBiff $ record for $ Biff f
+dialgebra :: forall c t f g. (ADTRecord t, Constraints t c, Functor f, Applicative g)
+        => (forall s. c s => f s -> g s) -> f t -> g t
+dialgebra f = runBiff $ record @c $ Biff f
 
 -- |
 --
 -- @
--- cotraverse = `gcotraverse1` (`For` :: `For` `Distributive`) `cotraverse`
+-- cotraverse = `gcotraverse1` \@`Distributive` `cotraverse`
 -- @
 --
 -- `gcotraverse1` is `record1` specialized to `Costar`.
-gcotraverse1 :: (ADTRecord1 t, Constraints1 t c, Functor f)
-             => for c -> (forall d e s. c s => (f d -> e) -> f (s d) -> s e) -> (f a -> b) -> f (t a) -> t b
-gcotraverse1 for f p = runCostar $ record1 for (Costar . f . runCostar) (Costar p)
+gcotraverse1 :: forall c t f a b. (ADTRecord1 t, Constraints1 t c, Functor f)
+             => (forall d e s. c s => (f d -> e) -> f (s d) -> s e) -> (f a -> b) -> f (t a) -> t b
+gcotraverse1 f p = runCostar $ record1 @c (Costar . f . runCostar) (Costar p)
 
 infixr 9 .:
 (.:) :: (c -> d) -> (a -> b -> c) -> (a -> b -> d)

@@ -12,7 +12,7 @@ Author:               Sjoerd Visscher
 Maintainer:           sjoerd@w3future.com
 Category:             Generics
 Build-type:           Simple
-Cabal-version:        >= 1.6
+Cabal-version:        >= 1.8
 
 Extra-Source-Files:
   examples/*.hs
@@ -36,3 +36,15 @@ Library
 source-repository head
   type:     git
   location: git://github.com/sjoerdvisscher/one-liner.git
+
+Test-suite unittests
+  Hs-source-dirs:  test
+  Main-is:         unittests.hs
+
+  Build-depends:
+      base
+    , contravariant
+    , HUnit
+    , one-liner
+
+  Type: exitcode-stdio-1.0

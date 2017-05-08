@@ -76,9 +76,11 @@ class (ks :: [(* -> * -> *) -> Constraint]) |- (k :: (* -> * -> *) -> Constraint
 
 instance {-# OVERLAPPABLE #-} ks |- k => (_k ': ks) |- k where
   (_ :: proxy0 (_k ': ks)) |- proxy1 = (Proxy :: Proxy ks) |- proxy1
+  {-# INLINE (|-) #-}
 
 instance (k ': _ks) |- k where
   _ |- _ = id
+  {-# INLINE (|-) #-}
 
 generic' :: forall t c p ks a b proxy0 for. (ADT_ Identity Proxy ks t, Constraints' t c AnyType, Satisfies p ks)
          => proxy0 ks
@@ -86,6 +88,7 @@ generic' :: forall t c p ks a b proxy0 for. (ADT_ Identity Proxy ks t, Constrain
          -> (forall s. c s => p s s)
          -> p (t a) (t b)
 generic' proxy0 for f = generic_ proxy0 (Proxy :: Proxy Identity) for (Identity f) (Proxy :: Proxy AnyType) Proxy Proxy
+{-# INLINE generic' #-}
 
 nonEmpty1' :: forall t c1 p ks a b proxy0 for. (ADT_ Proxy Identity ks t, Constraints' t AnyType c1, Satisfies p ks)
            => proxy0 ks
@@ -94,6 +97,7 @@ nonEmpty1' :: forall t c1 p ks a b proxy0 for. (ADT_ Proxy Identity ks t, Constr
            -> p a b
            -> p (t a) (t b)
 nonEmpty1' proxy0 for f p = generic_ proxy0 (Proxy :: Proxy Proxy) (Proxy :: Proxy AnyType) Proxy for (Identity f) (Identity p)
+{-# INLINE nonEmpty1' #-}
 
 generic1' :: forall t c1 p ks a b proxy0 for. (ADT_ Identity Identity ks t, Constraints' t AnyType c1, Satisfies p ks, ks |- GenericEmptyProfunctor)
           => proxy0 ks
@@ -103,6 +107,7 @@ generic1' :: forall t c1 p ks a b proxy0 for. (ADT_ Identity Identity ks t, Cons
           -> p (t a) (t b)
 generic1' proxy0 for f p = (proxy0 |- (Proxy :: Proxy GenericEmptyProfunctor))
   (generic_ proxy0 (Proxy :: Proxy Identity) (Proxy :: Proxy AnyType) (Identity identity) for (Identity f) (Identity p))
+{-# INLINE generic1' #-}
 
 class ADT_ (nullary :: * -> *) (unary :: * -> *) (ks :: [(* -> * -> *) -> Constraint]) (t :: * -> *) where
   generic_ :: (Constraints' t c c1, Satisfies p ks)
@@ -117,36 +122,45 @@ class ADT_ (nullary :: * -> *) (unary :: * -> *) (ks :: [(* -> * -> *) -> Constr
 
 instance ks |- GenericEmptyProfunctor => ADT_ nullary unary ks V1 where
   generic_ proxy0 _ _ _ _ _ _ = (proxy0 |- (Proxy :: Proxy GenericEmptyProfunctor)) zero
+  {-# INLINE generic_ #-}
 
 instance ks |- GenericUnitProfunctor => ADT_ nullary unary ks U1 where
   generic_ proxy0 _ _ _ _ _ _ = (proxy0 |- (Proxy :: Proxy GenericUnitProfunctor)) unit
+  {-# INLINE generic_ #-}
 
 instance (ks |- GenericSumProfunctor, ADT_ nullary unary ks f, ADT_ nullary unary ks g) => ADT_ nullary unary ks (f :+: g) where
   generic_ proxy0 proxy1 for f for1 f1 p1 = (proxy0 |- (Proxy :: Proxy GenericSumProfunctor))
     (plus (generic_ proxy0 proxy1 for f for1 f1 p1) (generic_ proxy0 proxy1 for f for1 f1 p1))
+  {-# INLINE generic_ #-}
 
 instance (ks |- GenericProductProfunctor, ADT_ nullary unary ks f, ADT_ nullary unary ks g) => ADT_ nullary unary ks (f :*: g) where
   generic_ proxy0 proxy1 for f for1 f1 p1 = (proxy0 |- (Proxy :: Proxy GenericProductProfunctor))
     (mult (generic_ proxy0 proxy1 for f for1 f1 p1) (generic_ proxy0 proxy1 for f for1 f1 p1))
+  {-# INLINE generic_ #-}
 
 instance ks |- Profunctor => ADT_ Identity unary ks (K1 i v) where
   generic_ proxy0 _ _ f _ _ _ = (proxy0 |- (Proxy :: Proxy Profunctor)) (dimap unK1 K1 (runIdentity f))
+  {-# INLINE generic_ #-}
 
 instance (ks |- Profunctor, ADT_ nullary unary ks f) => ADT_ nullary unary ks (M1 i c f) where
   generic_ proxy0 proxy1 for f for1 f1 p1 = (proxy0 |- (Proxy :: Proxy Profunctor))
     (dimap unM1 M1 (generic_ proxy0 proxy1 for f for1 f1 p1))
+  {-# INLINE generic_ #-}
 
 instance (ks |- Profunctor, ADT_ nullary Identity ks g) => ADT_ nullary Identity ks (f :.: g) where
   generic_ proxy0 proxy1 for f for1 f1 p1 = (proxy0 |- (Proxy :: Proxy Profunctor))
     (dimap unComp1 Comp1 $ runIdentity f1 (generic_ proxy0 proxy1 for f for1 f1 p1))
+  {-# INLINE generic_ #-}
 
 instance ks |- Profunctor => ADT_ nullary Identity ks Par1 where
   generic_ proxy0 _ _ _ _ _ p = (proxy0 |- (Proxy :: Proxy Profunctor))
     (dimap unPar1 Par1 (runIdentity p))
+  {-# INLINE generic_ #-}
 
 instance ks |- Profunctor => ADT_ nullary Identity ks (Rec1 f) where
   generic_ proxy0 _ _ _ _ f p = (proxy0 |- (Proxy :: Proxy Profunctor))
     (dimap unRec1 Rec1 (runIdentity (f <*> p)))
+  {-# INLINE generic_ #-}
 
 absurd :: V1 a -> b
 absurd = \case {}
@@ -286,26 +300,32 @@ instance GenericEmptyProfunctor Ctor where
 record :: forall c p t. (ADTRecord t, Constraints t c, GenericRecordProfunctor p)
        => (forall s. c s => p s s) -> p t t
 record f = dimap from to $ generic' (Proxy :: Proxy RecordProfunctor) (Proxy :: Proxy c) f
+{-# INLINE record #-}
 
 record1 :: forall c p t a b. (ADTRecord1 t, Constraints1 t c, GenericRecordProfunctor p)
         => (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 record1 f p = dimap from1 to1 $ nonEmpty1' (Proxy :: Proxy RecordProfunctor) (Proxy :: Proxy c) f p
+{-# INLINE record1 #-}
 
 nonEmpty :: forall c p t. (ADTNonEmpty t, Constraints t c, GenericNonEmptyProfunctor p)
          => (forall s. c s => p s s) -> p t t
 nonEmpty f = dimap from to $ generic' (Proxy :: Proxy NonEmptyProfunctor) (Proxy :: Proxy c) f
+{-# INLINE nonEmpty #-}
 
 nonEmpty1 :: forall c p t a b. (ADTNonEmpty1 t, Constraints1 t c, GenericNonEmptyProfunctor p)
           => (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 nonEmpty1 f p = dimap from1 to1 $ nonEmpty1' (Proxy :: Proxy NonEmptyProfunctor) (Proxy :: Proxy c) f p
+{-# INLINE nonEmpty1 #-}
 
 generic :: forall c p t. (ADT t, Constraints t c, GenericProfunctor p)
         => (forall s. c s => p s s) -> p t t
 generic f = dimap from to $ generic' (Proxy :: Proxy ADTProfunctor) (Proxy :: Proxy c) f
+{-# INLINE generic #-}
 
 generic1 :: forall c p t a b. (ADT1 t, Constraints1 t c, GenericProfunctor p)
          => (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 generic1 f p = dimap from1 to1 $ generic1' (Proxy :: Proxy ADTProfunctor) (Proxy :: Proxy c) f p
+{-# INLINE generic1 #-}
 
 -- | `Constraints` is a constraint type synonym, containing the constraint
 -- requirements for an instance for `t` of class `c`.
@@ -340,9 +360,11 @@ type ADT1 t = (Generic1 t, ADT1' (Rep1 t), Constraints1 t AnyType)
 -- @
 ctorIndex :: ADT t => t -> Int
 ctorIndex = index $ generic @AnyType (Ctor (const 0) 1)
+{-# INLINE ctorIndex #-}
 
 ctorIndex1 :: ADT1 t => t a -> Int
 ctorIndex1 = index $ generic1 @AnyType (const $ Ctor (const 0) 1) (Ctor (const 0) 1)
+{-# INLINE ctorIndex1 #-}
 
 -- | Any type is instance of `AnyType`, you can use it with @\@`AnyType`@
 -- if you don't actually need a class constraint.

@@ -90,7 +90,7 @@ generic' proxy0 for f = generic_ proxy0 (Proxy :: Proxy Identity) for (Identity 
 nonEmpty1' :: forall t c1 p ks a b proxy0 for. (ADT_ Proxy Identity ks t, Constraints' t AnyType c1, Satisfies p ks)
            => proxy0 ks
            -> for c1
-           -> (forall s a b. c1 s => p a b -> p (s a) (s b))
+           -> (forall s d e. c1 s => p d e -> p (s d) (s e))
            -> p a b
            -> p (t a) (t b)
 nonEmpty1' proxy0 for f p = generic_ proxy0 (Proxy :: Proxy Proxy) (Proxy :: Proxy AnyType) Proxy for (Identity f) (Identity p)
@@ -98,7 +98,7 @@ nonEmpty1' proxy0 for f p = generic_ proxy0 (Proxy :: Proxy Proxy) (Proxy :: Pro
 generic1' :: forall t c1 p ks a b proxy0 for. (ADT_ Identity Identity ks t, Constraints' t AnyType c1, Satisfies p ks, ks |- GenericEmptyProfunctor)
           => proxy0 ks
           -> for c1
-          -> (forall s a b. c1 s => p a b -> p (s a) (s b))
+          -> (forall s d e. c1 s => p d e -> p (s d) (s e))
           -> p a b
           -> p (t a) (t b)
 generic1' proxy0 for f p = (proxy0 |- (Proxy :: Proxy GenericEmptyProfunctor))
@@ -111,7 +111,7 @@ class ADT_ (nullary :: * -> *) (unary :: * -> *) (ks :: [(* -> * -> *) -> Constr
            -> for c
            -> (forall s. c s => nullary (p s s))
            -> for1 c1
-           -> (forall s1 a b. c1 s1 => unary (p a b -> p (s1 a) (s1 b)))
+           -> (forall s1 d e. c1 s1 => unary (p d e -> p (s1 d) (s1 e)))
            -> unary (p a b)
            -> p (t a) (t b)
 
@@ -217,12 +217,12 @@ instance Applicative f => GenericEmptyProfunctor (Star f) where
   zero = Star absurd
   identity = Star pure
 
-instance Functor f => GenericUnitProfunctor (Costar f) where
+instance GenericUnitProfunctor (Costar f) where
   unit = Costar $ const U1
 instance Functor f => GenericProductProfunctor (Costar f) where
   mult (Costar f) (Costar g) = Costar $ \lr -> f (fst1 <$> lr) :*: g (snd1 <$> lr)
 
-instance (Functor f, Applicative g, Profunctor p, GenericUnitProfunctor p) => GenericUnitProfunctor (Biff p f g) where
+instance (Applicative g, Profunctor p, GenericUnitProfunctor p) => GenericUnitProfunctor (Biff p f g) where
   unit = Biff $ dimap (const U1) pure unit
 instance (Functor f, Applicative g, Profunctor p, GenericProductProfunctor p) => GenericProductProfunctor (Biff p f g) where
   mult (Biff f) (Biff g) = Biff $ dimap

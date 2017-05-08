@@ -10,7 +10,7 @@
 -- All functions without postfix are for instances of `Generic`, and functions
 -- with postfix `1` are for instances of `Generic1` (with kind @* -> *@) which
 -- get an extra argument to specify how to deal with the parameter.
--- The function `create_` does not require any such instance, but must be given
+-- The function `createA_` does not require any such instance, but must be given
 -- a constructor explicitly.
 -----------------------------------------------------------------------------
 {-# LANGUAGE
@@ -114,11 +114,11 @@ createA1 f = dimap Joker runJoker $ generic1 @c $ dimap runJoker Joker f
 -- type with a single constructor (e.g., quadruples @(,,,)@).
 --
 -- @
--- arbitrary = `createA_` (`For` :: `For` Arbitrary) arbitrary (,,,)
+-- arbitrary = `createA_` \@`Arbitrary` arbitrary (,,,)
 -- @
-createA_ :: (FunConstraints t c, Applicative f)
-         => for c -> (forall s. c s => f s) -> t -> f (Result t)
-createA_ for run = autoApply for run . pure
+createA_ :: forall c t f. (FunConstraints c t, Applicative f)
+         => (forall s. c s => f s) -> t -> f (Result t)
+createA_ run = autoApply @c run . pure
 
 -- | `consume1` is `generic1` specialized to `Clown`.
 consume1 :: forall c t f a. (ADT1 t, Constraints1 t c, Decidable f)

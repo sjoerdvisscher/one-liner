@@ -365,21 +365,21 @@ type family Result t where
 -- | Automatically apply a lifted function to a polymorphic argument as
 -- many times as possible.
 --
--- A constraint `FunConstraint t c` is equivalent to the conjunction of
+-- A constraint `FunConstraint c t` is equivalent to the conjunction of
 -- constraints `c s` for every argument type of `t`.
 --
 -- If @r@ is not a function type:
 --
 -- @
--- c a :- FunConstraints (a -> r) c
--- (c a, c b) :- FunConstraints (a -> b -> r) c
--- (c a, c b, c d) :- FunConstraints (a -> b -> d -> r) c
+-- c a :- FunConstraints c (a -> r)
+-- (c a, c b) :- FunConstraints c (a -> b -> r)
+-- (c a, c b, c d) :- FunConstraints c (a -> b -> d -> r)
 -- @
-class FunConstraints t c where
-  autoApply :: Applicative f => for c -> (forall s. c s => f s) -> f t -> f (Result t)
+class FunConstraints c t where
+  autoApply :: Applicative f => (forall s. c s => f s) -> f t -> f (Result t)
 
-instance {-# OVERLAPPING #-} (c a, FunConstraints b c) => FunConstraints (a -> b) c where
-  autoApply for run f = autoApply for run (f <*> run)
+instance {-# OVERLAPPING #-} (c a, FunConstraints c b) => FunConstraints c (a -> b) where
+  autoApply run f = autoApply @c run (f <*> run)
 
-instance Result r ~ r => FunConstraints r c where
-  autoApply _for _run r = r
+instance Result r ~ r => FunConstraints c r where
+  autoApply _run r = r

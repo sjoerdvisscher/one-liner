@@ -376,13 +376,13 @@ instance AnyType (a :: k)
 -- If @r@ is not a function type (i.e., does not unify with `_ -> _`):
 --
 -- @
--- `Result` (a -> r) ~ r
--- `Result` (a -> b -> r) ~ r
--- `Result` (a -> b -> c -> r) ~ r
+-- `FunResult` (a -> r) ~ r
+-- `FunResult` (a -> b -> r) ~ r
+-- `FunResult` (a -> b -> c -> r) ~ r
 -- @
-type family Result t where
-  Result (a -> b) = Result b
-  Result r = r
+type family FunResult t where
+  FunResult (a -> b) = FunResult b
+  FunResult r = r
 
 -- | Automatically apply a lifted function to a polymorphic argument as
 -- many times as possible.
@@ -398,10 +398,10 @@ type family Result t where
 -- (c a, c b, c d) :- FunConstraints c (a -> b -> d -> r)
 -- @
 class FunConstraints c t where
-  autoApply :: Applicative f => (forall s. c s => f s) -> f t -> f (Result t)
+  autoApply :: Applicative f => (forall s. c s => f s) -> f t -> f (FunResult t)
 
 instance {-# OVERLAPPING #-} (c a, FunConstraints c b) => FunConstraints c (a -> b) where
   autoApply run f = autoApply @c run (f <*> run)
 
-instance Result r ~ r => FunConstraints c r where
+instance FunResult r ~ r => FunConstraints c r where
   autoApply _run r = r

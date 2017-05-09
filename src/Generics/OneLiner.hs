@@ -49,6 +49,7 @@ module Generics.OneLiner (
   -- * Types
   ADT, ADTNonEmpty, ADTRecord, Constraints,
   ADT1, ADTNonEmpty1, ADTRecord1, Constraints1,
+  FunConstraints, FunResult,
   AnyType
 ) where
 

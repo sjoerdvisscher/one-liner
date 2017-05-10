@@ -22,10 +22,10 @@ instance Profunctor (Lensed s t) where
   dimap f g (Lensed ix) = Lensed $ \l -> g (ix (l . (fmap g .) . (. f)))
 instance GenericUnitProfunctor (Lensed s t) where
   unit = Lensed (constLens U1)
-instance GenericProductProfunctor (Lensed s t) where  
+instance GenericProductProfunctor (Lensed s t) where
   mult (Lensed a) (Lensed b) = Lensed (\l -> a (l . fstl) :*: b (l . sndl))
 
--- GenericRecordProfunctor is a bit too polymorphic,
+-- GenericProductProfunctor is a bit too polymorphic,
 -- but we can use unsafeCoerce because the types will end up being the same anyway.
 fstl :: Lens ((a :*: b) x) ((c :*: b') x') (a x) (c x')
 fstl f (a :*: b) = (\c -> c :*: unsafeCoerce b) <$> f a

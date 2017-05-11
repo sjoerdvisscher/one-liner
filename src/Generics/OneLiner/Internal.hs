@@ -376,7 +376,7 @@ generic1 f p = dimap from1 to1 $ generic1' (Proxy :: Proxy ADTProfunctor) (Proxy
 -- | `Constraints` is a constraint type synonym, containing the constraint
 -- requirements for an instance for `t` of class `c`.
 -- It requires an instance of class `c` for each component of `t`.
-type Constraints t c = (Constraints' (Rep t) c AnyType)
+type Constraints t c = Constraints' (Rep t) c AnyType
 
 type Constraints1 t c = Constraints' (Rep1 t) AnyType c
 

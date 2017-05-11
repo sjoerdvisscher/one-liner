@@ -43,9 +43,16 @@ module Generics.OneLiner (
   -- * Generic programming with profunctors
   -- | All the above functions have been implemented using these functions,
   -- using different `profunctor`s.
-  GenericRecordProfunctor, GenericUnitProfunctor(..), GenericProductProfunctor(..), record, record1,
-  GenericNonEmptyProfunctor, GenericSumProfunctor(..), nonEmpty, nonEmpty1,
-  GenericProfunctor, GenericEmptyProfunctor(..), generic, generic1,
+  record, nonEmpty, generic,
+  record1, nonEmpty1, generic1,
+  -- ** Classes
+  GenericRecordProfunctor,
+  GenericNonEmptyProfunctor,
+  GenericProfunctor,
+  GenericUnitProfunctor(..),
+  GenericProductProfunctor(..),
+  GenericSumProfunctor(..),
+  GenericEmptyProfunctor(..),
   -- * Types
   ADT, ADTNonEmpty, ADTRecord, Constraints,
   ADT1, ADTNonEmpty1, ADTRecord1, Constraints1,

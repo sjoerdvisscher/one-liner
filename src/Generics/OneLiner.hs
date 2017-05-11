@@ -49,6 +49,7 @@ module Generics.OneLiner (
   -- * Types
   ADT, ADTNonEmpty, ADTRecord, Constraints,
   ADT1, ADTNonEmpty1, ADTRecord1, Constraints1,
+  FunConstraints, FunResult,
   AnyType
 ) where
 
@@ -122,7 +123,7 @@ createA1 f = dimap Joker runJoker $ generic1 @c $ dimap runJoker Joker f
 -- arbitrary = `createA_` \@`Arbitrary` arbitrary (,,,)
 -- @
 createA_ :: forall c t f. (FunConstraints c t, Applicative f)
-         => (forall s. c s => f s) -> t -> f (Result t)
+         => (forall s. c s => f s) -> t -> f (FunResult t)
 createA_ run = autoApply @c run . pure
 {-# INLINE createA_ #-}
 

@@ -8,8 +8,10 @@
 -- Portability :  non-portable
 --
 -- All functions without postfix are for instances of `Generic`, and functions
--- with postfix `1` are for instances of `Generic1` (with kind @* -> *@) which
+-- with postfix @1@ are for instances of `Generic1` (with kind @* -> *@) which
 -- get an extra argument to specify how to deal with the parameter.
+-- Functions with postfix @01@ are also for `Generic1` but they get yet another
+-- argument that, like the `Generic` functions, allows handling of constant leaves.
 -- The function `createA_` does not require any such instance, but must be given
 -- a constructor explicitly.
 -----------------------------------------------------------------------------
@@ -34,6 +36,7 @@ module Generics.OneLiner (
   -- * Combining values
   mzipWith, zipWithA,
   mzipWith1, zipWithA1,
+  Zip(..),
   -- * Consuming values
   consume, consume1,
   -- * Functions for records
@@ -45,6 +48,7 @@ module Generics.OneLiner (
   -- using different `profunctor`s.
   record, nonEmpty, generic,
   record1, nonEmpty1, generic1,
+  record01, nonEmpty01, generic01,
   -- ** Classes
   GenericRecordProfunctor,
   GenericNonEmptyProfunctor,
@@ -55,7 +59,7 @@ module Generics.OneLiner (
   GenericEmptyProfunctor(..),
   -- * Types
   ADT, ADTNonEmpty, ADTRecord, Constraints,
-  ADT1, ADTNonEmpty1, ADTRecord1, Constraints1,
+  ADT1, ADTNonEmpty1, ADTRecord1, Constraints1, Constraints01,
   FunConstraints, FunResult,
   AnyType
 ) where
@@ -219,6 +223,8 @@ mzipWith f = outm2 $ zipWithA @c $ inm2 f
 
 -- | Combine two values by combining each component of the structures with the given function, under an applicative effect.
 -- Returns `empty` if the constructors don't match.
+--
+-- `zipWithA` is `generic` specialized to `Zip`
 zipWithA :: forall c t f. (ADT t, Constraints t c, Alternative f)
          => (forall s. c s => s -> s -> f s) -> t -> t -> f t
 zipWithA f = runZip $ generic @c $ Zip f
@@ -236,6 +242,7 @@ mzipWith1 :: forall c t m a. (ADT1 t, Constraints1 t c, Monoid m)
 mzipWith1 f = dimap inm2 outm2 $ zipWithA1 @c $ dimap outm2 inm2 f
 {-# INLINE mzipWith1 #-}
 
+-- | `zipWithA1` is `generic1` specialized to `Zip`
 zipWithA1 :: forall c t f a b. (ADT1 t, Constraints1 t c, Alternative f)
           => (forall d e s. c s => (d -> d -> f e) -> s d -> s d -> f (s e))
           -> (a -> a -> f b) -> t a -> t a -> f (t b)

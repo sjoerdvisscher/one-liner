@@ -34,8 +34,8 @@ module Generics.OneLiner (
   gmap, gfoldMap, gtraverse,
   gmap1, gfoldMap1, gtraverse1,
   -- * Combining values
-  mzipWith, zipWithA,
-  mzipWith1, zipWithA1,
+  mzipWith, mzipWith', zipWithA,
+  mzipWith1, mzipWith1', zipWithA1,
   Zip(..),
   -- * Consuming values
   consume, consume1,
@@ -218,8 +218,19 @@ gtraverse1 f = dimap Star runStar $ generic1 @c $ dimap runStar Star f
 -- `mzipWith` is `zipWithA` specialized to @`Compose` `Maybe` (`Const` m)@
 mzipWith :: forall c t m. (ADT t, Constraints t c, Monoid m)
          => (forall s. c s => s -> s -> m) -> t -> t -> m
-mzipWith f = outm2 $ zipWithA @c $ inm2 f
+mzipWith = mzipWith' @c mempty
 {-# INLINE mzipWith #-}
+
+-- | Variant of `mzipWith` where you can choose the value which is returned
+-- when the constructors don't match.
+--
+-- @
+-- `compare` s t = `mzipWith'` \@`Ord` (`compare` (`ctorIndex` s) (`ctorIndex` t)) `compare` s t
+-- @
+mzipWith' :: forall c t m. (ADT t, Constraints t c, Monoid m)
+          => m -> (forall s. c s => s -> s -> m) -> t -> t -> m
+mzipWith' m f = outm2 m $ zipWithA @c $ inm2 f
+{-# INLINE mzipWith' #-}
 
 -- | Combine two values by combining each component of the structures with the given function, under an applicative effect.
 -- Returns `empty` if the constructors don't match.
@@ -239,8 +250,17 @@ zipWithA f = runZip $ generic @c $ Zip f
 mzipWith1 :: forall c t m a. (ADT1 t, Constraints1 t c, Monoid m)
           => (forall s b. c s => (b -> b -> m) -> s b -> s b -> m)
           -> (a -> a -> m) -> t a -> t a -> m
-mzipWith1 f = dimap inm2 outm2 $ zipWithA1 @c $ dimap outm2 inm2 f
+mzipWith1 = mzipWith1' @c mempty
 {-# INLINE mzipWith1 #-}
+
+-- | Variant of `mzipWith1` where you can choose the value which is returned
+-- when the constructors don't match.
+mzipWith1' :: forall c t m a. (ADT1 t, Constraints1 t c, Monoid m)
+           => m
+           -> (forall s b. c s => (b -> b -> m) -> s b -> s b -> m)
+           -> (a -> a -> m) -> t a -> t a -> m
+mzipWith1' m f = dimap inm2 (outm2 m) $ zipWithA1 @c $ dimap (outm2 m) inm2 f
+{-# INLINE mzipWith1' #-}
 
 -- | `zipWithA1` is `generic1` specialized to `Zip`
 zipWithA1 :: forall c t f a b. (ADT1 t, Constraints1 t c, Alternative f)
@@ -274,8 +294,8 @@ instance Alternative f => GenericEmptyProfunctor (Zip f) where
 inm2 :: (t -> t -> m) -> t -> t -> Compose Maybe (Const m) a
 inm2 f = Compose .: Just .: Const .: f
 {-# INLINE inm2 #-}
-outm2 :: Monoid m => (t -> t -> Compose Maybe (Const m) a) -> t -> t -> m
-outm2 f = maybe mempty getConst .: getCompose .: f
+outm2 :: Monoid m => m -> (t -> t -> Compose Maybe (Const m) a) -> t -> t -> m
+outm2 z f = maybe z getConst .: getCompose .: f
 {-# INLINE outm2 #-}
 
 -- | Implement a nullary operator by calling the operator for each component.

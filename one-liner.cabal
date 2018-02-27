@@ -22,7 +22,9 @@ Library
 
   Exposed-modules:
     Generics.OneLiner
+    Generics.OneLiner.Binary
     Generics.OneLiner.Internal
+    Generics.OneLiner.Internal.Unary
 
   Build-depends:
       base          >= 4.9 && < 5

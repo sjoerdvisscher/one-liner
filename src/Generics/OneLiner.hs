@@ -62,9 +62,8 @@ module Generics.OneLiner (
   ADT1, ADTNonEmpty1, ADTRecord1, Constraints1, Constraints01,
   FunConstraints, FunResult,
   AnyType
-) where
+  ) where
 
-import GHC.Generics
 import Control.Applicative
 import Data.Bifunctor.Biff
 import Data.Bifunctor.Clown
@@ -73,8 +72,21 @@ import Data.Functor.Compose
 import Data.Functor.Contravariant.Divisible
 import Data.Profunctor
 import Data.Tagged
-import Generics.OneLiner.Internal
-
+import Generics.OneLiner.Binary
+  ( GenericRecordProfunctor
+  , GenericNonEmptyProfunctor
+  , GenericProfunctor
+  , GenericUnitProfunctor(..)
+  , GenericProductProfunctor(..)
+  , GenericSumProfunctor(..)
+  , GenericEmptyProfunctor(..)
+  , FunConstraints
+  , FunResult
+  , Zip(..)
+  , Pair(..)
+  )
+import qualified Generics.OneLiner.Internal as I
+import Generics.OneLiner.Internal.Unary
 
 -- | Create a value (one for each constructor), given how to construct the components.
 --
@@ -135,7 +147,7 @@ createA1 f = dimap Joker runJoker $ generic1 @c $ dimap runJoker Joker f
 -- @
 createA_ :: forall c t f. (FunConstraints c t, Applicative f)
          => (forall s. c s => f s) -> t -> f (FunResult t)
-createA_ run = autoApply @c run . pure
+createA_ run = I.autoApply @c run . pure
 {-# INLINE createA_ #-}
 
 -- | `consume1` is `generic1` specialized to `Clown`.
@@ -269,28 +281,6 @@ zipWithA1 :: forall c t f a b. (ADT1 t, Constraints1 t c, Alternative f)
 zipWithA1 f = dimap Zip runZip $ generic1 @c $ dimap runZip Zip f
 {-# INLINE zipWithA1 #-}
 
-newtype Zip f a b = Zip { runZip :: a -> a -> f b }
-instance Functor f => Profunctor (Zip f) where
-  dimap f g (Zip h) = Zip $ \a1 a2 -> fmap g (h (f a1) (f a2))
-  {-# INLINE dimap #-}
-instance Applicative f => GenericUnitProfunctor (Zip f) where
-  unit = Zip $ \_ _ -> pure U1
-  {-# INLINE unit #-}
-instance Applicative f => GenericProductProfunctor (Zip f) where
-  mult (Zip f) (Zip g) = Zip $ \(al :*: ar) (bl :*: br) -> (:*:) <$> f al bl <*> g ar br
-  {-# INLINE mult #-}
-instance Alternative f => GenericSumProfunctor (Zip f) where
-  plus (Zip f) (Zip g) = Zip h where
-    h (L1 a) (L1 b) = fmap L1 (f a b)
-    h (R1 a) (R1 b) = fmap R1 (g a b)
-    h _ _ = empty
-  {-# INLINE plus #-}
-instance Alternative f => GenericEmptyProfunctor (Zip f) where
-  zero = Zip absurd
-  {-# INLINE zero #-}
-  identity = Zip $ \_ _ -> empty
-  {-# INLINE identity #-}
-
 inm2 :: (t -> t -> m) -> t -> t -> Compose Maybe (Const m) a
 inm2 f = Compose .: Just .: Const .: f
 {-# INLINE inm2 #-}
@@ -349,11 +339,6 @@ createA' :: forall c t f. (ADTRecord t, Constraints t c, Applicative f)
          => (forall s. c s => f s) -> f t
 createA' f = runJoker $ record @c $ Joker f
 {-# INLINE createA' #-}
-
-data Pair a = Pair a a
-instance Functor Pair where
-  fmap f (Pair a b) = Pair (f a) (f b)
-  {-# INLINE fmap #-}
 
 -- | Create an F-algebra, given an F-algebra for each of the components.
 --

@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Generics.OneLiner.Internal
+-- Module      :  Generics.OneLiner.Internal.Unary
 -- License     :  BSD-style (see the file LICENSE)
 --
 -- Maintainer  :  sjoerd@w3future.com
@@ -8,7 +8,6 @@
 -- Portability :  non-portable
 --
 -----------------------------------------------------------------------------
-
 {-# LANGUAGE
     PolyKinds
   , RankNTypes
@@ -22,16 +21,16 @@
   , MultiParamTypeClasses
   , UndecidableSuperClasses
   #-}
-
 module Generics.OneLiner.Internal.Unary where
 
 import Data.Kind (Constraint)
+import Generics.OneLiner.Classes
 import qualified Generics.OneLiner.Internal as I
 
 -- | Type-level 'join', of kind @(k -> k -> k') -> k -> k'@.
 type J f a = f a a
 
--- | Constraint-level 'duplicate', of kind @(k -> Constraint) -> k -> k -> Constraint
+-- | Constraint-level 'duplicate', of kind @(k -> Constraint) -> k -> k -> Constraint@.
 class (c a, a ~ b) => D (c :: k -> Constraint) a b
 instance (c a, a ~ b) => D c a b
 
@@ -47,47 +46,47 @@ type ADTNonEmpty1 t = (I.ADTNonEmpty1 t t, Constraints1 t AnyType)
 type ADT t = (I.ADT t t, Constraints t AnyType)
 type ADT1 t = (I.ADT1 t t, Constraints1 t AnyType)
 
-record :: forall c p t. (ADTRecord t, Constraints t c, I.GenericRecordProfunctor p)
+record :: forall c p t. (ADTRecord t, Constraints t c, GenericRecordProfunctor p)
        => (forall s. c s => p s s) -> p t t
 record = I.record @(D c)
 {-# INLINE record #-}
 
-record1 :: forall c p t a b. (ADTRecord1 t, Constraints1 t c, I.GenericRecordProfunctor p)
+record1 :: forall c p t a b. (ADTRecord1 t, Constraints1 t c, GenericRecordProfunctor p)
         => (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 record1 = I.record1 @(D c)
 {-# INLINE record1 #-}
 
-record01 :: forall c0 c1 p t a b. (ADTRecord1 t, Constraints01 t c0 c1, I.GenericRecordProfunctor p)
+record01 :: forall c0 c1 p t a b. (ADTRecord1 t, Constraints01 t c0 c1, GenericRecordProfunctor p)
          => (forall s. c0 s => p s s) -> (forall d e s. c1 s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 record01 = I.record01 @(D c0) @(D c1)
 {-# INLINE record01 #-}
 
-nonEmpty :: forall c p t. (ADTNonEmpty t, Constraints t c, I.GenericNonEmptyProfunctor p)
+nonEmpty :: forall c p t. (ADTNonEmpty t, Constraints t c, GenericNonEmptyProfunctor p)
          => (forall s. c s => p s s) -> p t t
 nonEmpty = I.nonEmpty @(D c)
 {-# INLINE nonEmpty #-}
 
-nonEmpty1 :: forall c p t a b. (ADTNonEmpty1 t, Constraints1 t c, I.GenericNonEmptyProfunctor p)
+nonEmpty1 :: forall c p t a b. (ADTNonEmpty1 t, Constraints1 t c, GenericNonEmptyProfunctor p)
           => (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 nonEmpty1 = I.nonEmpty1 @(D c)
 {-# INLINE nonEmpty1 #-}
 
-nonEmpty01 :: forall c0 c1 p t a b. (ADTNonEmpty1 t, Constraints01 t c0 c1, I.GenericNonEmptyProfunctor p)
+nonEmpty01 :: forall c0 c1 p t a b. (ADTNonEmpty1 t, Constraints01 t c0 c1, GenericNonEmptyProfunctor p)
            => (forall s. c0 s => p s s) -> (forall d e s. c1 s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 nonEmpty01 = I.nonEmpty01 @(D c0) @(D c1)
 {-# INLINE nonEmpty01 #-}
 
-generic :: forall c p t. (ADT t, Constraints t c, I.GenericProfunctor p)
+generic :: forall c p t. (ADT t, Constraints t c, GenericProfunctor p)
         => (forall s. c s => p s s) -> p t t
 generic = I.generic @(D c) @p @t @t
 {-# INLINE generic #-}
 
-generic1 :: forall c p t a b. (ADT1 t, Constraints1 t c, I.GenericProfunctor p)
+generic1 :: forall c p t a b. (ADT1 t, Constraints1 t c, GenericProfunctor p)
          => (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 generic1 = I.generic1 @(D c) @p @t @t
 {-# INLINE generic1 #-}
 
-generic01 :: forall c0 c1 p t a b. (ADT1 t, Constraints01 t c0 c1, I.GenericProfunctor p)
+generic01 :: forall c0 c1 p t a b. (ADT1 t, Constraints01 t c0 c1, GenericProfunctor p)
           => (forall s. c0 s => p s s) -> (forall d e s. c1 s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
 generic01 = I.generic01 @(D c0) @(D c1)
 {-# INLINE generic01 #-}

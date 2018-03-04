@@ -40,6 +40,7 @@ instance TinplateHelper (a == b) a b => TinplateAlias a b where
 
 tinplate :: forall a b f. (ADT b, Constraints b (TinplateAlias a), Applicative f) => (a -> f a) -> b -> f b
 tinplate f = gtraverse @(TinplateAlias a) (trav f)
+{-# INLINE tinplate #-}
 
 
 

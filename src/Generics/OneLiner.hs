@@ -36,7 +36,6 @@ module Generics.OneLiner (
   -- * Combining values
   mzipWith, mzipWith', zipWithA,
   mzipWith1, mzipWith1', zipWithA1,
-  Zip(..),
   -- * Consuming values
   consume, consume1,
   -- * Functions for records
@@ -72,20 +71,8 @@ import Data.Functor.Compose
 import Data.Functor.Contravariant.Divisible
 import Data.Profunctor
 import Data.Tagged
-import Generics.OneLiner.Binary
-  ( GenericRecordProfunctor
-  , GenericNonEmptyProfunctor
-  , GenericProfunctor
-  , GenericUnitProfunctor(..)
-  , GenericProductProfunctor(..)
-  , GenericSumProfunctor(..)
-  , GenericEmptyProfunctor(..)
-  , FunConstraints
-  , FunResult
-  , Zip(..)
-  , Pair(..)
-  )
-import qualified Generics.OneLiner.Internal as I
+import Generics.OneLiner.Classes
+import Generics.OneLiner.Internal (FunConstraints, FunResult, autoApply, Pair(..), (.:))
 import Generics.OneLiner.Internal.Unary
 
 -- | Create a value (one for each constructor), given how to construct the components.
@@ -147,7 +134,7 @@ createA1 f = dimap Joker runJoker $ generic1 @c $ dimap runJoker Joker f
 -- @
 createA_ :: forall c t f. (FunConstraints c t, Applicative f)
          => (forall s. c s => f s) -> t -> f (FunResult t)
-createA_ run = I.autoApply @c run . pure
+createA_ run = autoApply @c run . pure
 {-# INLINE createA_ #-}
 
 -- | `consume1` is `generic1` specialized to `Clown`.
@@ -375,8 +362,3 @@ gcotraverse1 :: forall c t f a b. (ADTRecord1 t, Constraints1 t c, Functor f)
              => (forall d e s. c s => (f d -> e) -> f (s d) -> s e) -> (f a -> b) -> f (t a) -> t b
 gcotraverse1 f p = runCostar $ record1 @c (Costar . f . runCostar) (Costar p)
 {-# INLINE gcotraverse1 #-}
-
-infixr 9 .:
-(.:) :: (c -> d) -> (a -> b -> c) -> (a -> b -> d)
-(.:) = (.) . (.)
-{-# INLINE (.:) #-}

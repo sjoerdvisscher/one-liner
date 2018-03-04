@@ -1,5 +1,5 @@
 Name:                 one-liner
-Version:              0.9.2
+Version:              1.0
 Synopsis:             Constraint-based generics
 Description:          Write short and concise generic instances of type classes.
                       one-liner is particularly useful for writing default
@@ -8,7 +8,7 @@ Homepage:             https://github.com/sjoerdvisscher/one-liner
 Bug-reports:          https://github.com/sjoerdvisscher/one-liner/issues
 License:              BSD3
 License-file:         LICENSE
-Author:               Sjoerd Visscher
+Author:               Sjoerd Visscher, Xia Li-yao
 Maintainer:           sjoerd@w3future.com
 Category:             Generics
 Build-type:           Simple
@@ -16,6 +16,7 @@ Cabal-version:        >= 1.8
 
 Extra-Source-Files:
   examples/*.hs
+  CHANGELOG
 
 Library
   HS-Source-Dirs:  src
@@ -23,6 +24,7 @@ Library
   Exposed-modules:
     Generics.OneLiner
     Generics.OneLiner.Binary
+    Generics.OneLiner.Classes
     Generics.OneLiner.Internal
     Generics.OneLiner.Internal.Unary
 

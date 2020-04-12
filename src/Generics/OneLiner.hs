@@ -22,8 +22,11 @@
   , ConstraintKinds
   , FlexibleContexts
   , TypeApplications
+  , FlexibleInstances
   , AllowAmbiguousTypes
   , ScopedTypeVariables
+  , QuantifiedConstraints
+  , TypeOperators
   #-}
 module Generics.OneLiner (
   -- * Producing values
@@ -34,8 +37,8 @@ module Generics.OneLiner (
   gmap, gfoldMap, gtraverse,
   gmap1, gfoldMap1, gtraverse1,
   -- * Combining values
-  mzipWith, mzipWith', zipWithA,
-  mzipWith1, mzipWith1', zipWithA1,
+  mzipWith, mzipWith', zipWithA, zipnWithA,
+  mzipWith1, mzipWith1', zipWithA1, zipnWithA1,
   -- * Consuming values
   consume, consume1,
   -- * Functions for records
@@ -67,8 +70,10 @@ import Control.Applicative
 import Data.Bifunctor.Biff
 import Data.Bifunctor.Clown
 import Data.Bifunctor.Joker
+import Data.Coerce
 import Data.Functor.Compose
 import Data.Functor.Contravariant.Divisible
+import Data.Semigroup.Traversable
 import Data.Profunctor
 import Data.Tagged
 import Generics.OneLiner.Classes
@@ -100,15 +105,27 @@ create = createA @c
 -- `createA` is `generic` specialized to `Joker`.
 createA :: forall c t f. (ADT t, Constraints t c, Alternative f)
         => (forall s. c s => f s) -> f t
-createA f = runJoker $ generic @c $ Joker f
+createA = genericC @c @(Joker f) @(FS f)
 {-# INLINE createA #-}
+
+type family f @@ s
+data FS (f :: * -> *)
+type instance FS f @@ s = f s
+data S2FS (f :: * -> *)
+type instance S2FS f @@ s = s -> f s
+
+genericC :: forall c p f t. (ADT t, Constraints t c, GenericProfunctor p, forall s. Coercible (p s s) (f @@ s)) => (forall s. c s => f @@ s) -> f @@ t
+genericC f = coerce $ generic @c @p @t (h f)
+  where
+    h :: forall s. (Coercible (p s s) (f @@ s), c s) => f @@ s -> p s s
+    h f = coerce @(f @@ s) f
 
 -- | Generate ways to consume values of type `t`. This is the contravariant version of `createA`.
 --
 -- `consume` is `generic` specialized to `Clown`.
 consume :: forall c t f. (ADT t, Constraints t c, Decidable f)
         => (forall s. c s => f s) -> f t
-consume f = runClown $ generic @c $ Clown f
+consume = genericC @c @(Clown f) @(FS f)
 {-# INLINE consume #-}
 
 -- | `create1` is `createA1` specialized to lists.
@@ -171,7 +188,7 @@ gfoldMap f = getConst . gtraverse @c (Const . f)
 -- `gtraverse` is `generic` specialized to `Star`.
 gtraverse :: forall c t f. (ADT t, Constraints t c, Applicative f)
           => (forall s. c s => s -> f s) -> t -> f t
-gtraverse f = runStar $ generic @c $ Star f
+gtraverse f = genericC @c @(Star f) @(S2FS f)
 {-# INLINE gtraverse #-}
 
 -- |
@@ -234,11 +251,20 @@ mzipWith' m f = outm2 m $ zipWithA @c $ inm2 f
 -- | Combine two values by combining each component of the structures with the given function, under an applicative effect.
 -- Returns `empty` if the constructors don't match.
 --
--- `zipWithA` is `generic` specialized to `Zip`
+-- `zipWithA` is `zipnWithA` specialized to `Pair`
 zipWithA :: forall c t f. (ADT t, Constraints t c, Alternative f)
          => (forall s. c s => s -> s -> f s) -> t -> t -> f t
-zipWithA f = runZip $ generic @c $ Zip f
+zipWithA f = zipnWithA @c (\(Pair a b) -> f a b) .: Pair
 {-# INLINE zipWithA #-}
+
+-- | Combine values by combining each component of the structures with the given function, under an applicative effect.
+-- Returns `empty` if the constructors don't match.
+--
+-- `zipnWithA` is `generic` specialized to @`Biff` (->)@.
+zipnWithA :: forall c t f g. (ADT t, Constraints t c, Traversable1 g, Alternative f)
+         => (forall s. c s => g s -> f s) -> g t -> f t
+zipnWithA f = runBiff $ generic @c $ Biff f
+{-# INLINE zipnWithA #-}
 
 -- |
 -- @
@@ -261,12 +287,20 @@ mzipWith1' :: forall c t m a. (ADT1 t, Constraints1 t c, Monoid m)
 mzipWith1' m f = dimap inm2 (outm2 m) $ zipWithA1 @c $ dimap (outm2 m) inm2 f
 {-# INLINE mzipWith1' #-}
 
--- | `zipWithA1` is `generic1` specialized to `Zip`
+-- | `zipWithA1` is `zipnWithA1` specialized to `Pair`
 zipWithA1 :: forall c t f a b. (ADT1 t, Constraints1 t c, Alternative f)
           => (forall d e s. c s => (d -> d -> f e) -> s d -> s d -> f (s e))
           -> (a -> a -> f b) -> t a -> t a -> f (t b)
-zipWithA1 f = dimap Zip runZip $ generic1 @c $ dimap runZip Zip f
+zipWithA1 f g = zipnWithA1 @c (\h (Pair a b) -> f (h .: Pair) a b) (\(Pair a b) -> g a b) .: Pair
 {-# INLINE zipWithA1 #-}
+
+-- | `zipnWithA1` is `generic1` specialized to @`Biff` (->)@
+zipnWithA1 :: forall c t g f a b. (ADT1 t, Constraints1 t c, Traversable1 g, Alternative f)
+          => (forall d e s. c s => (g d -> f e) -> g (s d) -> f (s e))
+          -> (g a -> f b) -> g (t a) -> f (t b)
+zipnWithA1 f = dimap Biff runBiff $ generic1 @c $ dimap runBiff Biff f
+{-# INLINE zipnWithA1 #-}
+
 
 inm2 :: (t -> t -> m) -> t -> t -> Compose Maybe (Const m) a
 inm2 f = Compose .: Just .: Const .: f

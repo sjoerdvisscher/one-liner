@@ -31,6 +31,9 @@ import GHC.Types (Constraint)
 import Data.Profunctor
 import Data.Proxy
 import Data.Functor.Identity
+import Data.Functor.Apply
+import Data.Semigroup.Foldable
+import Data.Semigroup.Traversable
 
 import Generics.OneLiner.Classes
 
@@ -213,6 +216,17 @@ generic01 :: forall c0 c1 p t t' a b. (ADT1 t t', Constraints01 t t' c0 c1, Gene
 generic01 k f p = dimap from1 to1 $ generic01' @ADTProfunctor @c0 @c1 k f p
 {-# INLINE generic01 #-}
 
+class AllGeneric t t' where
+  allGeneric :: GenericProfunctor p => p t t'
+instance (ADT t t', Constraints t t' AllGeneric) => AllGeneric t t' where
+  allGeneric = generic @AllGeneric allGeneric
+
+class AllGeneric1 t t' where
+  allGeneric1 :: GenericProfunctor p => p a b -> p (t a) (t' b)
+instance (ADT1 t t', Constraints1 t t' AllGeneric1) => AllGeneric1 t t' where
+  allGeneric1 = generic1 @AllGeneric1 allGeneric1
+
+
 -- | `Constraints` is a constraint type synonym, containing the constraint
 -- requirements for an instance for `t` of class `c`.
 -- It requires an instance of class `c` for each component of `t`.
@@ -283,7 +297,15 @@ data Pair a = Pair a a
 instance Functor Pair where
   fmap f (Pair a b) = Pair (f a) (f b)
   {-# INLINE fmap #-}
-  
+instance Foldable Pair where
+  foldMap f (Pair a b) = f a <> f b
+instance Traversable Pair where
+  traverse f (Pair a b) = Pair <$> f a <*> f b
+instance Foldable1 Pair where
+  foldMap1 f (Pair a b) = f a <> f b
+instance Traversable1 Pair where
+  traverse1 f (Pair a b) = Pair <$> f a <.> f b
+
 infixr 9 .:
 (.:) :: (c -> d) -> (a -> b -> c) -> (a -> b -> d)
 (.:) = (.) . (.)

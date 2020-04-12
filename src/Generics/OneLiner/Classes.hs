@@ -27,8 +27,11 @@ import Data.Bifunctor.Product
 import Data.Bifunctor.Tannen
 import Data.Functor.Contravariant.Divisible
 import Data.Functor.Compose
+import Data.Semigroup.Foldable
+import Data.Semigroup.Traversable
 import Data.Profunctor
 import Data.Tagged
+import qualified Data.Void as Void
 
 -- | A generic function using a `GenericRecordProfunctor` works on any data type
 -- with exactly one constructor, a.k.a. records,
@@ -117,6 +120,20 @@ instance (Functor f, Applicative g, Profunctor p, GenericProductProfunctor p) =>
     (\(Compose l :*: Compose r) -> liftA2 (:*:) l r)
     (mult (dimap getCompose Compose f) (dimap getCompose Compose g))
   {-# INLINE mult #-}
+instance (Traversable f, Alternative g) => GenericSumProfunctor (Biff (->) f g) where
+  plus (Biff f) (Biff g) = Biff $ \x -> let 
+      l (L1 a) = Just a; l _ = Nothing
+      r (R1 a) = Just a; r _ = Nothing
+    in case (traverse l x, traverse r x) of
+      (Just fla, Nothing) -> fmap L1 $ f fla
+      (Nothing, Just fra) -> fmap R1 $ g fra
+      _ -> empty
+  {-# INLINE plus #-}
+instance (Foldable1 f, Alternative g) => GenericEmptyProfunctor (Biff (->) f g) where
+  zero = Biff $ Void.absurd . foldMap1 absurd
+  {-# INLINE zero #-}
+  identity = Biff $ \_ -> empty
+  {-# INLINE identity #-}
 
 instance Applicative f => GenericUnitProfunctor (Joker f) where
   unit = Joker $ pure U1
@@ -176,29 +193,6 @@ instance (Applicative f, GenericEmptyProfunctor p) => GenericEmptyProfunctor (Ta
   zero = Tannen (pure zero)
   {-# INLINE zero #-}
   identity = Tannen (pure identity)
-  {-# INLINE identity #-}
-
-
-newtype Zip f a b = Zip { runZip :: a -> a -> f b }
-instance Functor f => Profunctor (Zip f) where
-  dimap f g (Zip h) = Zip $ \a1 a2 -> fmap g (h (f a1) (f a2))
-  {-# INLINE dimap #-}
-instance Applicative f => GenericUnitProfunctor (Zip f) where
-  unit = Zip $ \_ _ -> pure U1
-  {-# INLINE unit #-}
-instance Applicative f => GenericProductProfunctor (Zip f) where
-  mult (Zip f) (Zip g) = Zip $ \(al :*: ar) (bl :*: br) -> (:*:) <$> f al bl <*> g ar br
-  {-# INLINE mult #-}
-instance Alternative f => GenericSumProfunctor (Zip f) where
-  plus (Zip f) (Zip g) = Zip h where
-    h (L1 a) (L1 b) = fmap L1 (f a b)
-    h (R1 a) (R1 b) = fmap R1 (g a b)
-    h _ _ = empty
-  {-# INLINE plus #-}
-instance Alternative f => GenericEmptyProfunctor (Zip f) where
-  zero = Zip absurd
-  {-# INLINE zero #-}
-  identity = Zip $ \_ _ -> empty
   {-# INLINE identity #-}
 
 

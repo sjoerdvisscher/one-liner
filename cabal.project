@@ -1,0 +1,4 @@
+packages: *.cabal
+
+package one-liner
+  ghc-options: -Wall -Werror

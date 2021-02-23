@@ -8,6 +8,7 @@
 -- Portability :  non-portable
 --
 -----------------------------------------------------------------------------
+{-# OPTIONS -Wno-orphans #-}
 {-# LANGUAGE
     EmptyCase
   , LambdaCase
@@ -36,7 +37,7 @@ import qualified Data.Profunctor as P
 import Data.Profunctor.Linear (Profunctor(..))
 import Data.Profunctor.Kleisli.Linear
 import Data.Tagged
-import Data.Unrestricted.Linear (Ur(..))
+import Data.Unrestricted.Linear ()
 import GHC.Types (Multiplicity(..))
 import Prelude.Linear (forget)
 import qualified Data.Functor.Linear as DL

@@ -35,7 +35,7 @@ module Generics.OneLiner (
   gmap, gfoldMap, gtraverse,
   glmap, glfoldMap, gltraverse,
   gmap1, gfoldMap1, gtraverse1,
-  glmap1, gltraverse1,
+  glmap1, gltraverse1, gltraverse01,
   -- * Combining values
   mzipWith, mzipWith', zipWithA,
   mzipWith1, mzipWith1', zipWithA1,
@@ -55,10 +55,12 @@ module Generics.OneLiner (
   GenericRecordProfunctor,
   GenericNonEmptyProfunctor,
   GenericProfunctor,
+  Generic1Profunctor,
   GenericUnitProfunctor(..),
   GenericProductProfunctor(..),
   GenericSumProfunctor(..),
   GenericEmptyProfunctor(..),
+  GenericConstantProfunctor(..),
   -- * Types
   ADT, ADTNonEmpty, ADTRecord, Constraints,
   ADT1, ADTNonEmpty1, ADTRecord1, Constraints1, Constraints01,
@@ -182,9 +184,9 @@ gfoldMap :: forall c t m. (ADT t, Constraints t c, Monoid m)
 gfoldMap f = getConst . gtraverse @c (Const . f)
 {-# INLINE gfoldMap #-}
 
--- | Map each component of a structure to a monoid, and combine the results.
+-- | Map each component of a structure to a linear monoid, and combine the results.
 --
--- If you have a class `Size`, which measures the size of a structure, then this could be the default implementation:
+-- For example. this could be the default implementation of `Linear.Consumable`:
 --
 -- @
 -- consume = `glfoldMap` \@`Linear.Consumable` `Linear.consume`
@@ -205,6 +207,8 @@ gtraverse f = runStar $ generic @c $ Star f
 {-# INLINE gtraverse #-}
 
 -- | Map each component of a structure to an action linearly, evaluate these actions from left to right, and collect the results.
+--
+-- For example. this could be the default implementations of `Linear.Dupable` and `Linear.Movable`:
 --
 -- @
 -- dupV = `gltraverse` \@`Linear.Dupable` `Linear.dupV`
@@ -278,7 +282,7 @@ gltraverse01 :: forall c t f a b. (ADT1 t, Constraints01 t Linear.Movable c, DL.
 gltraverse01 f = dimap Kleisli runKleisli $ generic01 @Linear.Movable @c (Kleisli (\a -> urpure (Linear.move a))) $ dimap runKleisli Kleisli f
 {-# INLINE gltraverse01 #-}
 
-urpure :: DL.Applicative f => Linear.Ur a %1 -> f a
+urpure :: DL.Applicative f => Linear.Ur a %1-> f a
 urpure (Linear.Ur a) = DL.pure a
 
 -- | Combine two values by combining each component of the structures to a monoid, and combine the results.

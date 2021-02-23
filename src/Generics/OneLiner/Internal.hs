@@ -40,13 +40,13 @@ import qualified Unsafe.Linear as Unsafe
 
 import Generics.OneLiner.Classes
 
-to :: Generic a => Rep a x %1 -> a
+to :: Generic a => Rep a x %1-> a
 to = Unsafe.toLinear G.to
-from :: Generic a => a %1 -> Rep a x
+from :: Generic a => a %1-> Rep a x
 from = Unsafe.toLinear G.from
-to1 :: Generic1 f => Rep1 f x %1 -> f x
+to1 :: Generic1 f => Rep1 f x %1-> f x
 to1 = Unsafe.toLinear G.to1
-from1 :: Generic1 f => f x %1 -> Rep1 f x
+from1 :: Generic1 f => f x %1-> Rep1 f x
 from1 = Unsafe.toLinear G.from1
 
 type family Constraints' (t :: Type -> Type) (t' :: Type -> Type) (c :: Type -> Type -> Constraint) (c1 :: (Type -> Type) -> (Type -> Type) -> Constraint) :: Constraint
@@ -301,11 +301,7 @@ instance Functor Pair where
   fmap f (Pair a b) = Pair (f a) (f b)
   {-# INLINE fmap #-}
 
-getPair :: Pair a %1 -> (a, a)
-getPair (Pair a b) = (a, b)
-
 infixr 9 .:
 (.:) :: (c -> d) -> (a -> b -> c) -> (a -> b -> d)
 (.:) = (.) . (.)
 {-# INLINE (.:) #-}
-

@@ -34,7 +34,7 @@ module Generics.OneLiner.Binary
   gmap, gtraverse,
   glmap, gltraverse,
   gmap1, gtraverse1,
-  glmap1, gltraverse1,
+  glmap1, gltraverse1, gltraverse01,
   -- * Combining values
   zipWithA, zipWithA1,
   -- * Functions for records
@@ -50,10 +50,12 @@ module Generics.OneLiner.Binary
   GenericRecordProfunctor,
   GenericNonEmptyProfunctor,
   GenericProfunctor,
+  Generic1Profunctor,
   GenericUnitProfunctor(..),
   GenericProductProfunctor(..),
   GenericSumProfunctor(..),
   GenericEmptyProfunctor(..),
+  GenericConstantProfunctor(..),
   -- * Types
   ADT, ADTNonEmpty, ADTRecord, Constraints,
   ADT1, ADTNonEmpty1, ADTRecord1, Constraints1, Constraints01,
@@ -68,7 +70,9 @@ import Data.Profunctor
 import Data.Profunctor.Kleisli.Linear
 import Generics.OneLiner.Classes
 import Generics.OneLiner.Internal
+import Generics.OneLiner.Internal.Unary (D)
 import qualified Data.Functor.Linear as DL
+import qualified Data.Unrestricted.Linear as Linear
 import qualified Control.Functor.Linear as CL
 
 -- | Map over a structure, updating each component.
@@ -126,6 +130,15 @@ gltraverse1 :: forall c t t' f a b. (ADT1 t t', Constraints1 t t' c, CL.Applicat
             => (forall d e s s'. c s s' => (d %1-> f e) -> s d %1-> f (s' e)) -> (a %1-> f b) -> t a %1-> f (t' b)
 gltraverse1 f = dimap Kleisli runKleisli $ generic1 @c $ dimap runKleisli Kleisli f
 {-# INLINE gltraverse1 #-}
+
+-- | `gltraverse01` is `generic01` specialized to linear `Kleisli`, requiring `Linear.Movable` for constants.
+gltraverse01 :: forall c t t' f a b. (ADT1 t t', Constraints01 t t' (D Linear.Movable) c, DL.Applicative f)
+             => (forall d e s s'. c s s' => (d %1-> f e) -> s d %1-> f (s' e)) -> (a %1-> f b) -> t a %1-> f (t' b)
+gltraverse01 f = dimap Kleisli runKleisli $ generic01 @(D Linear.Movable) @c (Kleisli (\a -> urpure (Linear.move a))) $ dimap runKleisli Kleisli f
+{-# INLINE gltraverse01 #-}
+
+urpure :: DL.Applicative f => Linear.Ur a %1-> f a
+urpure (Linear.Ur a) = DL.pure a
 
 -- | Combine two values by combining each component of the structures with the given function, under an applicative effect.
 -- Returns `empty` if the constructors don't match.

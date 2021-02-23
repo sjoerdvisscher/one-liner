@@ -7,18 +7,19 @@
 -- Stability   :  experimental
 -- Portability :  non-portable
 --
--- These generic functions allow changing the types of the constant leaves. 
--- They require type classes with 2 parameters, the first for the input type 
+-- These generic functions allow changing the types of the constant leaves.
+-- They require type classes with 2 parameters, the first for the input type
 -- and the second for the output type.
 --
 -- All functions without postfix are for instances of `Generic`, and functions
--- with postfix @1@ are for instances of `Generic1` (with kind @* -> *@) which
+-- with postfix @1@ are for instances of `Generic1` (with kind @Type -> Type@) which
 -- get an extra argument to specify how to deal with the parameter.
 -- Functions with postfix @01@ are also for `Generic1` but they get yet another
 -- argument that, like the `Generic` functions, allows handling of constant leaves.
 -----------------------------------------------------------------------------
 {-# LANGUAGE
     RankNTypes
+  , LinearTypes
   , Trustworthy
   , TypeFamilies
   , ConstraintKinds
@@ -27,10 +28,13 @@
   , AllowAmbiguousTypes
   , ScopedTypeVariables
   #-}
-module Generics.OneLiner.Binary (
+module Generics.OneLiner.Binary
+(
   -- * Traversing values
   gmap, gtraverse,
+  glmap, gltraverse,
   gmap1, gtraverse1,
+  glmap1, gltraverse1,
   -- * Combining values
   zipWithA, zipWithA1,
   -- * Functions for records
@@ -55,14 +59,17 @@ module Generics.OneLiner.Binary (
   ADT1, ADTNonEmpty1, ADTRecord1, Constraints1, Constraints01,
   FunConstraints, FunResult,
   AnyType
-) where
+)
+where
 
-import GHC.Generics
 import Control.Applicative
 import Data.Bifunctor.Biff
 import Data.Profunctor
+import Data.Profunctor.Kleisli.Linear
 import Generics.OneLiner.Classes
 import Generics.OneLiner.Internal
+import qualified Data.Functor.Linear as DL
+import qualified Control.Functor.Linear as CL
 
 -- | Map over a structure, updating each component.
 --
@@ -72,6 +79,14 @@ gmap :: forall c t t'. (ADT t t', Constraints t t' c)
 gmap = generic @c
 {-# INLINE gmap #-}
 
+-- | Map over a structure linearly, updating each component.
+--
+-- `glmap` is `generic` specialized to the linear arrow.
+glmap :: forall c t t'. (ADT t t', Constraints t t' c)
+      => (forall s s'. c s s' => s %1-> s') -> t %1-> t'
+glmap = generic @c
+{-# INLINE glmap #-}
+
 -- | Map each component of a structure to an action, evaluate these actions from left to right, and collect the results.
 --
 -- `gtraverse` is `generic` specialized to `Star`.
@@ -80,17 +95,37 @@ gtraverse :: forall c t t' f. (ADT t t', Constraints t t' c, Applicative f)
 gtraverse f = runStar $ generic @c $ Star f
 {-# INLINE gtraverse #-}
 
+-- | Map each component of a structure to an action linearly, evaluate these actions from left to right, and collect the results.
+--
+-- `gltraverse` is `generic` specialized to linear `Kleisli`.
+gltraverse :: forall c t t' f. (ADT t t', Constraints t t' c, DL.Applicative f)
+           => (forall s s'. c s s' => s %1-> f s') -> t %1-> f t'
+gltraverse f = runKleisli $ generic @c $ Kleisli f
+{-# INLINE gltraverse #-}
+
 -- | `gmap1` is `generic1` specialized to @(->)@.
 gmap1 :: forall c t t' a b. (ADT1 t t', Constraints1 t t' c)
-     => (forall d e s s'. c s s' => (d -> e) -> s d -> s' e) -> (a -> b) -> t a -> t' b
+      => (forall d e s s'. c s s' => (d -> e) -> s d -> s' e) -> (a -> b) -> t a -> t' b
 gmap1 = generic1 @c
 {-# INLINE gmap1 #-}
+
+-- | `glmap1` is `generic1` specialized to the linear arrow.
+glmap1 :: forall c t t' a b. (ADT1 t t', Constraints1 t t' c)
+       => (forall d e s s'. c s s' => (d %1-> e) -> s d %1-> s' e) -> (a %1-> b) -> t a %1-> t' b
+glmap1 = generic1 @c
+{-# INLINE glmap1 #-}
 
 -- | `gtraverse1` is `generic1` specialized to `Star`.
 gtraverse1 :: forall c t t' f a b. (ADT1 t t', Constraints1 t t' c, Applicative f)
            => (forall d e s s'. c s s' => (d -> f e) -> s d -> f (s' e)) -> (a -> f b) -> t a -> f (t' b)
 gtraverse1 f = dimap Star runStar $ generic1 @c $ dimap runStar Star f
 {-# INLINE gtraverse1 #-}
+
+-- | `gltraverse1` is `generic1` specialized to linear `Kleisli`.
+gltraverse1 :: forall c t t' f a b. (ADT1 t t', Constraints1 t t' c, CL.Applicative f)
+            => (forall d e s s'. c s s' => (d %1-> f e) -> s d %1-> f (s' e)) -> (a %1-> f b) -> t a %1-> f (t' b)
+gltraverse1 f = dimap Kleisli runKleisli $ generic1 @c $ dimap runKleisli Kleisli f
+{-# INLINE gltraverse1 #-}
 
 -- | Combine two values by combining each component of the structures with the given function, under an applicative effect.
 -- Returns `empty` if the constructors don't match.

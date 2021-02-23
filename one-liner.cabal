@@ -1,5 +1,5 @@
 Name:                 one-liner
-Version:              1.0.1
+Version:              2.0
 Synopsis:             Constraint-based generics
 Description:          Write short and concise generic instances of type classes.
                       one-liner is particularly useful for writing default
@@ -36,6 +36,7 @@ Library
     , bifunctors    >= 5.4 && < 6.0
     , profunctors   >= 5.2 && < 6.0
     , tagged        >= 0.8 && < 0.9
+    , linear-base   >= 0.1 && < 1.0
 
 source-repository head
   type:     git

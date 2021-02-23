@@ -11,6 +11,7 @@
 {-# LANGUAGE
     PolyKinds
   , RankNTypes
+  , LinearTypes
   , TypeFamilies
   , ConstraintKinds
   , FlexibleContexts
@@ -48,47 +49,47 @@ type ADT1 t = (I.ADT1 t t, Constraints1 t AnyType)
 
 record :: forall c p t. (ADTRecord t, Constraints t c, GenericRecordProfunctor p)
        => (forall s. c s => p s s) -> p t t
-record = I.record @(D c)
+record p = I.record @(D c) p
 {-# INLINE record #-}
 
 record1 :: forall c p t a b. (ADTRecord1 t, Constraints1 t c, GenericRecordProfunctor p)
         => (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
-record1 = I.record1 @(D c)
+record1 f = I.record1 @(D c) f
 {-# INLINE record1 #-}
 
 record01 :: forall c0 c1 p t a b. (ADTRecord1 t, Constraints01 t c0 c1, GenericRecordProfunctor p)
          => (forall s. c0 s => p s s) -> (forall d e s. c1 s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
-record01 = I.record01 @(D c0) @(D c1)
+record01 f g = I.record01 @(D c0) @(D c1) f g
 {-# INLINE record01 #-}
 
 nonEmpty :: forall c p t. (ADTNonEmpty t, Constraints t c, GenericNonEmptyProfunctor p)
          => (forall s. c s => p s s) -> p t t
-nonEmpty = I.nonEmpty @(D c)
+nonEmpty p = I.nonEmpty @(D c) p
 {-# INLINE nonEmpty #-}
 
 nonEmpty1 :: forall c p t a b. (ADTNonEmpty1 t, Constraints1 t c, GenericNonEmptyProfunctor p)
           => (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
-nonEmpty1 = I.nonEmpty1 @(D c)
+nonEmpty1 f = I.nonEmpty1 @(D c) f
 {-# INLINE nonEmpty1 #-}
 
 nonEmpty01 :: forall c0 c1 p t a b. (ADTNonEmpty1 t, Constraints01 t c0 c1, GenericNonEmptyProfunctor p)
            => (forall s. c0 s => p s s) -> (forall d e s. c1 s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
-nonEmpty01 = I.nonEmpty01 @(D c0) @(D c1)
+nonEmpty01 f g = I.nonEmpty01 @(D c0) @(D c1) f g
 {-# INLINE nonEmpty01 #-}
 
 generic :: forall c p t. (ADT t, Constraints t c, GenericProfunctor p)
         => (forall s. c s => p s s) -> p t t
-generic = I.generic @(D c) @p @t @t
+generic p = I.generic @(D c) @p @t @t p
 {-# INLINE generic #-}
 
-generic1 :: forall c p t a b. (ADT1 t, Constraints1 t c, GenericProfunctor p)
+generic1 :: forall c p t a b. (ADT1 t, Constraints1 t c, Generic1Profunctor p)
          => (forall d e s. c s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
-generic1 = I.generic1 @(D c) @p @t @t
+generic1 f = I.generic1 @(D c) @p @t @t f
 {-# INLINE generic1 #-}
 
 generic01 :: forall c0 c1 p t a b. (ADT1 t, Constraints01 t c0 c1, GenericProfunctor p)
           => (forall s. c0 s => p s s) -> (forall d e s. c1 s => p d e -> p (s d) (s e)) -> p a b -> p (t a) (t b)
-generic01 = I.generic01 @(D c0) @(D c1)
+generic01 f g = I.generic01 @(D c0) @(D c1) f g
 {-# INLINE generic01 #-}
 
 -- | Get the index in the lists returned by `create` and `createA` of the constructor of the given value.

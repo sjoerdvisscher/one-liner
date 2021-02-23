@@ -8,7 +8,7 @@
 -- Portability :  non-portable
 --
 -- All functions without postfix are for instances of `Generic`, and functions
--- with postfix @1@ are for instances of `Generic1` (with kind @* -> *@) which
+-- with postfix @1@ are for instances of `Generic1` (with kind @Type -> Type@) which
 -- get an extra argument to specify how to deal with the parameter.
 -- Functions with postfix @01@ are also for `Generic1` but they get yet another
 -- argument that, like the `Generic` functions, allows handling of constant leaves.
@@ -18,6 +18,7 @@
 {-# LANGUAGE
     RankNTypes
   , Trustworthy
+  , LinearTypes
   , TypeFamilies
   , ConstraintKinds
   , FlexibleContexts
@@ -32,7 +33,9 @@ module Generics.OneLiner (
   createA_,
   -- * Traversing values
   gmap, gfoldMap, gtraverse,
+  glmap, glfoldMap, gltraverse,
   gmap1, gfoldMap1, gtraverse1,
+  glmap1, gltraverse1,
   -- * Combining values
   mzipWith, mzipWith', zipWithA,
   mzipWith1, mzipWith1', zipWithA1,
@@ -69,7 +72,12 @@ import Data.Bifunctor.Clown
 import Data.Bifunctor.Joker
 import Data.Functor.Compose
 import Data.Functor.Contravariant.Divisible
+import qualified Control.Functor.Linear as CL
+import qualified Data.Functor.Linear as DL
+import qualified Data.Monoid.Linear as Linear
+import qualified Data.Unrestricted.Linear as Linear
 import Data.Profunctor
+import Data.Profunctor.Kleisli.Linear
 import Data.Tagged
 import Generics.OneLiner.Classes
 import Generics.OneLiner.Internal (FunConstraints, FunResult, autoApply, Pair(..), (.:))
@@ -152,6 +160,14 @@ gmap :: forall c t. (ADT t, Constraints t c)
 gmap = generic @c
 {-# INLINE gmap #-}
 
+-- | Map over a structure linearly, updating each component.
+--
+-- `glmap` is `generic` specialized to the linear arrow.
+glmap :: forall c t. (ADT t, Constraints t c)
+     => (forall s. c s => s %1-> s) -> t %1-> t
+glmap = generic @c
+{-# INLINE glmap #-}
+
 -- | Map each component of a structure to a monoid, and combine the results.
 --
 -- If you have a class `Size`, which measures the size of a structure, then this could be the default implementation:
@@ -166,6 +182,20 @@ gfoldMap :: forall c t m. (ADT t, Constraints t c, Monoid m)
 gfoldMap f = getConst . gtraverse @c (Const . f)
 {-# INLINE gfoldMap #-}
 
+-- | Map each component of a structure to a monoid, and combine the results.
+--
+-- If you have a class `Size`, which measures the size of a structure, then this could be the default implementation:
+--
+-- @
+-- consume = `glfoldMap` \@`Linear.Consumable` `Linear.consume`
+-- @
+--
+-- `glfoldMap` is `gltraverse` specialized to `Const`.
+glfoldMap :: forall c t m. (ADT t, Constraints t c, Linear.Monoid m)
+          => (forall s. c s => s %1-> m) -> t %1-> m
+glfoldMap f t = (\(Const c) -> c) (gltraverse @c (\x -> Const (f x)) t)
+{-# INLINE glfoldMap #-}
+
 -- | Map each component of a structure to an action, evaluate these actions from left to right, and collect the results.
 --
 -- `gtraverse` is `generic` specialized to `Star`.
@@ -174,6 +204,19 @@ gtraverse :: forall c t f. (ADT t, Constraints t c, Applicative f)
 gtraverse f = runStar $ generic @c $ Star f
 {-# INLINE gtraverse #-}
 
+-- | Map each component of a structure to an action linearly, evaluate these actions from left to right, and collect the results.
+--
+-- @
+-- dupV = `gltraverse` \@`Linear.Dupable` `Linear.dupV`
+-- move = `gltraverse` \@`Linear.Movable` `Linear.move`
+-- @
+--
+-- `gltraverse` is `generic` specialized to linear `Kleisli`.
+gltraverse :: forall c t f. (ADT t, Constraints t c, DL.Applicative f)
+           => (forall s. c s => s %1-> f s) -> t %1-> f t
+gltraverse f = runKleisli $ generic @c $ Kleisli f
+{-# INLINE gltraverse #-}
+
 -- |
 -- @
 -- fmap = `gmap1` \@`Functor` `fmap`
@@ -181,9 +224,20 @@ gtraverse f = runStar $ generic @c $ Star f
 --
 -- `gmap1` is `generic1` specialized to @(->)@.
 gmap1 :: forall c t a b. (ADT1 t, Constraints1 t c)
-     => (forall d e s. c s => (d -> e) -> s d -> s e) -> (a -> b) -> t a -> t b
+      => (forall d e s. c s => (d -> e) -> s d -> s e) -> (a -> b) -> t a -> t b
 gmap1 = generic1 @c
 {-# INLINE gmap1 #-}
+
+-- |
+-- @
+-- fmap = `gmap1` \@`Linear.Functor` `Linear.fmap`
+-- @
+--
+-- `glmap1` is `generic1` specialized to the linear arrow.
+glmap1 :: forall c t a b. (ADT1 t, Constraints1 t c)
+       => (forall d e s. c s => (d %1-> e) -> s d %1-> s e) -> (a %1-> b) -> t a %1-> t b
+glmap1 = generic1 @c
+{-# INLINE glmap1 #-}
 
 -- |
 -- @
@@ -206,6 +260,26 @@ gtraverse1 :: forall c t f a b. (ADT1 t, Constraints1 t c, Applicative f)
            => (forall d e s. c s => (d -> f e) -> s d -> f (s e)) -> (a -> f b) -> t a -> f (t b)
 gtraverse1 f = dimap Star runStar $ generic1 @c $ dimap runStar Star f
 {-# INLINE gtraverse1 #-}
+
+-- |
+-- @
+-- traverse = `gltraverse1` \@`DL.Traversable` `DL.traverse`
+-- @
+--
+-- `gltraverse1` is `generic1` specialized to linear `Kleisli`.
+gltraverse1 :: forall c t f a b. (ADT1 t, Constraints1 t c, CL.Applicative f)
+            => (forall d e s. c s => (d %1-> f e) -> s d %1-> f (s e)) -> (a %1-> f b) -> t a %1-> f (t b)
+gltraverse1 f = dimap Kleisli runKleisli $ generic1 @c $ dimap runKleisli Kleisli f
+{-# INLINE gltraverse1 #-}
+
+-- | `gltraverse01` is `generic01` specialized to linear `Kleisli`, requiring `Linear.Movable` for constants.
+gltraverse01 :: forall c t f a b. (ADT1 t, Constraints01 t Linear.Movable c, DL.Applicative f)
+             => (forall d e s. c s => (d %1-> f e) -> s d %1-> f (s e)) -> (a %1-> f b) -> t a %1-> f (t b)
+gltraverse01 f = dimap Kleisli runKleisli $ generic01 @Linear.Movable @c (Kleisli (\a -> urpure (Linear.move a))) $ dimap runKleisli Kleisli f
+{-# INLINE gltraverse01 #-}
+
+urpure :: DL.Applicative f => Linear.Ur a %1 -> f a
+urpure (Linear.Ur a) = DL.pure a
 
 -- | Combine two values by combining each component of the structures to a monoid, and combine the results.
 -- Returns `mempty` if the constructors don't match.

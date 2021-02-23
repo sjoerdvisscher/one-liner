@@ -11,7 +11,9 @@
 {-# LANGUAGE
     EmptyCase
   , LambdaCase
+  , LinearTypes
   , TypeOperators
+  , BlockArguments
   , MonoLocalBinds
   , FlexibleInstances
   , UndecidableInstances
@@ -25,10 +27,20 @@ import Data.Bifunctor.Clown
 import Data.Bifunctor.Joker
 import Data.Bifunctor.Product
 import Data.Bifunctor.Tannen
+import Data.Functor.Contravariant
 import Data.Functor.Contravariant.Divisible
 import Data.Functor.Compose
-import Data.Profunctor
+import Data.Kind (FUN)
+import Data.Profunctor hiding (Profunctor(..))
+import qualified Data.Profunctor as P
+import Data.Profunctor.Linear (Profunctor(..))
+import Data.Profunctor.Kleisli.Linear
 import Data.Tagged
+import Data.Unrestricted.Linear (Ur(..))
+import GHC.Types (Multiplicity(..))
+import Prelude.Linear (forget)
+import qualified Data.Functor.Linear as DL
+import qualified Control.Functor.Linear as CL
 
 -- | A generic function using a `GenericRecordProfunctor` works on any data type
 -- with exactly one constructor, a.k.a. records,
@@ -45,10 +57,18 @@ class (GenericRecordProfunctor p, GenericSumProfunctor p) => GenericNonEmptyProf
 instance (GenericRecordProfunctor p, GenericSumProfunctor p) => GenericNonEmptyProfunctor p where
 
 -- | A generic function using a `GenericProfunctor` works on any
--- algebraic data type, including those with no constructors and constants.
+-- algebraic data type of kind @Type@, including those with no constructors and constants.
 class (GenericNonEmptyProfunctor p, GenericEmptyProfunctor p) => GenericProfunctor p where
 instance (GenericNonEmptyProfunctor p, GenericEmptyProfunctor p) => GenericProfunctor p where
 
+-- | A generic function using a `Generic1Profunctor` works on any
+-- algebraic data type of kind @Type -> Type@, including those with no constructors and constants.
+class (GenericProfunctor p, GenericConstantProfunctor p) => Generic1Profunctor p where
+instance (GenericProfunctor p, GenericConstantProfunctor p) => Generic1Profunctor p where
+
+
+dimapForget :: P.Profunctor p => (a %1-> b) -> (c %1-> d) -> p b c -> p a d
+dimapForget l r = P.dimap (forget l) (forget r)
 
 class Profunctor p => GenericUnitProfunctor p where
   unit :: p (U1 a) (U1 a')
@@ -59,26 +79,48 @@ class Profunctor p => GenericProductProfunctor p where
 class Profunctor p => GenericSumProfunctor p where
   plus :: p (f a) (f' a') -> p (g a) (g' a') -> p ((f :+: g) a) ((f' :+: g') a')
 
+class Profunctor p => GenericConstantProfunctor p where
+  identity :: p c c
+
 class Profunctor p => GenericEmptyProfunctor p where
-  identity :: p a a
   zero :: p (V1 a) (V1 a')
 
 
+instance Profunctor (FUN 'One) where
+  dimap f g h = \x -> g (h (f x))
+instance GenericUnitProfunctor (FUN 'One) where
+  unit U1 = U1
+  {-# INLINE unit #-}
+instance GenericProductProfunctor (FUN 'One) where
+  mult f g (l :*: r) = f l :*: g r
+  {-# INLINE mult #-}
+instance GenericSumProfunctor (FUN 'One) where
+  plus f g = e1 (\x -> L1 (f x)) (\x -> R1 (g x))
+  {-# INLINE plus #-}
+instance GenericEmptyProfunctor (FUN 'One) where
+  zero = \case
+  {-# INLINE zero #-}
+instance GenericConstantProfunctor (FUN 'One) where
+  identity x = x
+  {-# INLINE identity #-}
+
 instance GenericUnitProfunctor (->) where
-  unit _ = U1
+  unit U1 = U1
   {-# INLINE unit #-}
 instance GenericProductProfunctor (->) where
   mult f g (l :*: r) = f l :*: g r
   {-# INLINE mult #-}
 instance GenericSumProfunctor (->) where
-  plus f g = e1 (L1 . f) (R1 . g)
+  plus f g = e1 (\x -> L1 (f x)) (\x -> R1 (g x))
   {-# INLINE plus #-}
 instance GenericEmptyProfunctor (->) where
-  zero = absurd
+  zero = \case
   {-# INLINE zero #-}
-  identity = id
+instance GenericConstantProfunctor (->) where
+  identity x = x
   {-# INLINE identity #-}
 
+instance Profunctor Tagged where dimap = dimapForget
 instance GenericUnitProfunctor Tagged where
   unit = Tagged U1
   {-# INLINE unit #-}
@@ -86,6 +128,7 @@ instance GenericProductProfunctor Tagged where
   mult (Tagged l) (Tagged r) = Tagged $ l :*: r
   {-# INLINE mult #-}
 
+instance Functor f => Profunctor (Star f) where dimap = dimapForget
 instance Applicative f => GenericUnitProfunctor (Star f) where
   unit = Star $ \_ -> pure U1
   {-# INLINE unit #-}
@@ -95,12 +138,30 @@ instance Applicative f => GenericProductProfunctor (Star f) where
 instance Applicative f => GenericSumProfunctor (Star f) where
   plus (Star f) (Star g) = Star $ e1 (fmap L1 . f) (fmap R1 . g)
   {-# INLINE plus #-}
-instance Applicative f => GenericEmptyProfunctor (Star f) where
-  zero = Star absurd
+instance Functor f => GenericEmptyProfunctor (Star f) where
+  zero = Star \case
   {-# INLINE zero #-}
+instance Applicative f => GenericConstantProfunctor (Star f) where
   identity = Star pure
   {-# INLINE identity #-}
 
+instance DL.Applicative f => GenericUnitProfunctor (Kleisli f) where
+  unit = Kleisli $ \U1 -> DL.pure U1
+  {-# INLINE unit #-}
+instance DL.Applicative f => GenericProductProfunctor (Kleisli f) where
+  mult (Kleisli f) (Kleisli g) = Kleisli $ \(l :*: r) -> (:*:) DL.<$> f l DL.<*> g r
+  {-# INLINE mult #-}
+instance DL.Applicative f => GenericSumProfunctor (Kleisli f) where
+  plus (Kleisli f) (Kleisli g) = Kleisli $ e1 (\x -> DL.fmap L1 (f x)) (\x -> DL.fmap R1 (g x))
+  {-# INLINE plus #-}
+instance DL.Applicative f => GenericEmptyProfunctor (Kleisli f) where
+  zero = Kleisli \case
+  {-# INLINE zero #-}
+instance CL.Applicative f => GenericConstantProfunctor (Kleisli f) where
+  identity = Kleisli CL.pure
+  {-# INLINE identity #-}
+
+instance Functor f => Profunctor (Costar f) where dimap = dimapForget
 instance Functor f => GenericUnitProfunctor (Costar f) where
   unit = Costar $ const U1
   {-# INLINE unit #-}
@@ -108,16 +169,18 @@ instance Functor f => GenericProductProfunctor (Costar f) where
   mult (Costar f) (Costar g) = Costar $ \lr -> f (fst1 <$> lr) :*: g (snd1 <$> lr)
   {-# INLINE mult #-}
 
-instance (Functor f, Applicative g, Profunctor p, GenericUnitProfunctor p) => GenericUnitProfunctor (Biff p f g) where
-  unit = Biff $ dimap (const U1) pure unit
+instance (Functor f, Applicative g, P.Profunctor p) => Profunctor (Biff p f g) where dimap = dimapForget
+instance (Functor f, Applicative g, P.Profunctor p, GenericUnitProfunctor p) => GenericUnitProfunctor (Biff p f g) where
+  unit = Biff $ P.dimap (const U1) pure unit
   {-# INLINE unit #-}
-instance (Functor f, Applicative g, Profunctor p, GenericProductProfunctor p) => GenericProductProfunctor (Biff p f g) where
-  mult (Biff f) (Biff g) = Biff $ dimap
+instance (Functor f, Applicative g, P.Profunctor p, GenericProductProfunctor p) => GenericProductProfunctor (Biff p f g) where
+  mult (Biff f) (Biff g) = Biff $ P.dimap
     (liftA2 (:*:) (Compose . fmap fst1) (Compose . fmap snd1))
     (\(Compose l :*: Compose r) -> liftA2 (:*:) l r)
-    (mult (dimap getCompose Compose f) (dimap getCompose Compose g))
+    (mult (P.dimap getCompose Compose f) (P.dimap getCompose Compose g))
   {-# INLINE mult #-}
 
+instance Functor f => Profunctor (Joker f) where dimap = dimapForget
 instance Applicative f => GenericUnitProfunctor (Joker f) where
   unit = Joker $ pure U1
   {-# INLINE unit #-}
@@ -130,9 +193,11 @@ instance Alternative f => GenericSumProfunctor (Joker f) where
 instance Alternative f => GenericEmptyProfunctor (Joker f) where
   zero = Joker empty
   {-# INLINE zero #-}
+instance Alternative f => GenericConstantProfunctor (Joker f) where
   identity = Joker empty
   {-# INLINE identity #-}
 
+instance Contravariant f => Profunctor (Clown f) where dimap = dimapForget
 instance Divisible f => GenericUnitProfunctor (Clown f) where
   unit = Clown conquer
   {-# INLINE unit #-}
@@ -143,11 +208,14 @@ instance Decidable f => GenericSumProfunctor (Clown f) where
   plus (Clown f) (Clown g) = Clown $ choose (e1 Left Right) f g
   {-# INLINE plus #-}
 instance Decidable f => GenericEmptyProfunctor (Clown f) where
-  zero = Clown $ lose absurd
+  zero = Clown $ lose \case
   {-# INLINE zero #-}
+instance Decidable f => GenericConstantProfunctor (Clown f) where
   identity = Clown conquer
   {-# INLINE identity #-}
 
+instance (Profunctor p, Profunctor q) => Profunctor (Product p q) where
+  dimap f g (Pair l r) = Pair (dimap f g l) (dimap f g r)
 instance (GenericUnitProfunctor p, GenericUnitProfunctor q) => GenericUnitProfunctor (Product p q) where
   unit = Pair unit unit
   {-# INLINE unit #-}
@@ -160,9 +228,12 @@ instance (GenericSumProfunctor p, GenericSumProfunctor q) => GenericSumProfuncto
 instance (GenericEmptyProfunctor p, GenericEmptyProfunctor q) => GenericEmptyProfunctor (Product p q) where
   zero = Pair zero zero
   {-# INLINE zero #-}
+instance (GenericConstantProfunctor p, GenericConstantProfunctor q) => GenericConstantProfunctor (Product p q) where
   identity = Pair identity identity
   {-# INLINE identity #-}
 
+instance (Applicative f, Profunctor p) => Profunctor (Tannen f p) where
+  dimap f g (Tannen p) = Tannen $ dimap f g <$> p
 instance (Applicative f, GenericUnitProfunctor p) => GenericUnitProfunctor (Tannen f p) where
   unit = Tannen (pure unit)
   {-# INLINE unit #-}
@@ -175,13 +246,14 @@ instance (Applicative f, GenericSumProfunctor p) => GenericSumProfunctor (Tannen
 instance (Applicative f, GenericEmptyProfunctor p) => GenericEmptyProfunctor (Tannen f p) where
   zero = Tannen (pure zero)
   {-# INLINE zero #-}
+instance (Applicative f, GenericConstantProfunctor p) => GenericConstantProfunctor (Tannen f p) where
   identity = Tannen (pure identity)
   {-# INLINE identity #-}
 
 
 newtype Zip f a b = Zip { runZip :: a -> a -> f b }
 instance Functor f => Profunctor (Zip f) where
-  dimap f g (Zip h) = Zip $ \a1 a2 -> fmap g (h (f a1) (f a2))
+  dimap f g (Zip h) = Zip $ \a1 a2 -> fmap (forget g) (h (f a1) (f a2))
   {-# INLINE dimap #-}
 instance Applicative f => GenericUnitProfunctor (Zip f) where
   unit = Zip $ \_ _ -> pure U1
@@ -195,18 +267,15 @@ instance Alternative f => GenericSumProfunctor (Zip f) where
     h (R1 a) (R1 b) = fmap R1 (g a b)
     h _ _ = empty
   {-# INLINE plus #-}
-instance Alternative f => GenericEmptyProfunctor (Zip f) where
-  zero = Zip absurd
+instance Functor f => GenericEmptyProfunctor (Zip f) where
+  zero = Zip \case
   {-# INLINE zero #-}
+instance Alternative f => GenericConstantProfunctor (Zip f) where
   identity = Zip $ \_ _ -> empty
   {-# INLINE identity #-}
 
 
-absurd :: V1 a -> b
-absurd = \case {}
-{-# INLINE absurd #-}
-
-e1 :: (f a -> b) -> (g a -> b) -> (f :+: g) a -> b
+e1 :: (f a %m-> b) -> (g a %m-> b) -> (f :+: g) a %m-> b
 e1 f _ (L1 l) = f l
 e1 _ f (R1 r) = f r
 {-# INLINE e1 #-}

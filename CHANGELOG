@@ -1,8 +1,14 @@
 CHANGELOG
 
+1.0 -> 2.0
+  - Require GHC 9
+  - Change Generics.OneLiner.Internal to use linear profunctors
+  - Add linear traversals
+  - Add `GenericConstantProfunctor` which is only needed by `generic1`.
+
 0.9 -> 1.0
-  - Added type changing traversals with Generics.OneLiner.Binary
-  - Changed Generics.OneLiner.Internal to work on binary type classes.
-  - Added Generics.OneLiner.Internal.Unary to convert the internals to unary
-  - Moved classes to Generics.OneLiner.Classes
-  - Started a change log
+  - Add type changing traversals with Generics.OneLiner.Binary
+  - Change Generics.OneLiner.Internal to work on binary type classes.
+  - Add Generics.OneLiner.Internal.Unary to convert the internals to unary
+  - Move classes to Generics.OneLiner.Classes
+  - Start a change log

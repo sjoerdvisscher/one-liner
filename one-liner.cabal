@@ -13,6 +13,7 @@ author:               Sjoerd Visscher, Xia Li-yao
 maintainer:           sjoerd@w3future.com
 category:             Generics
 build-type:           Simple
+tested-with:          GHC==9.0.1
 
 extra-source-files:
   examples/*.hs

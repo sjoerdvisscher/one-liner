@@ -1,6 +1,6 @@
 cabal-version:        2.0
 name:                 one-liner
-version:              2.0
+version:              2.1
 synopsis:             Constraint-based generics
 description:          Write short and concise generic instances of type classes.
                       one-liner is particularly useful for writing default
@@ -13,7 +13,7 @@ author:               Sjoerd Visscher, Xia Li-yao
 maintainer:           sjoerd@w3future.com
 category:             Generics
 build-type:           Simple
-tested-with:          GHC==9.0.1
+tested-with:          GHC==9.0.1, GHC==9.2.1
 
 extra-source-files:
   examples/*.hs

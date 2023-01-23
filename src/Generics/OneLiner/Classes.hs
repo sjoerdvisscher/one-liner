@@ -10,7 +10,8 @@
 -----------------------------------------------------------------------------
 {-# OPTIONS -Wno-orphans #-}
 {-# LANGUAGE
-    EmptyCase
+    CPP
+  , EmptyCase
   , LambdaCase
   , LinearTypes
   , TypeOperators
@@ -86,9 +87,10 @@ class Profunctor p => GenericConstantProfunctor p where
 class Profunctor p => GenericEmptyProfunctor p where
   zero :: p (V1 a) (V1 a')
 
-
+#if !MIN_VERSION_linear_base(0,2,0)
 instance Profunctor (FUN 'One) where
   dimap f g h = \x -> g (h (f x))
+#endif
 instance GenericUnitProfunctor (FUN 'One) where
   unit U1 = U1
   {-# INLINE unit #-}

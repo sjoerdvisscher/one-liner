@@ -1,5 +1,8 @@
 CHANGELOG
 
+2.0 -> 2.1
+  - Fix duplicate instance `Profunctor` `FUN` with linear-base 0.2
+
 1.0 -> 2.0
   - Require GHC 9
   - Change Generics.OneLiner.Internal to use linear profunctors

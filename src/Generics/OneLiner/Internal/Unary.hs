@@ -13,6 +13,7 @@
   , RankNTypes
   , LinearTypes
   , TypeFamilies
+  , TypeOperators
   , ConstraintKinds
   , FlexibleContexts
   , TypeApplications

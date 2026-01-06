@@ -1,4 +1,5 @@
-packages: *.cabal
+packages: .
 
-package one-liner
-  ghc-options: -Wall -Werror
+allow-newer:
+  , indexed-traversable:*
+  , linear-generics:*
